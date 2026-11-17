@@ -61,6 +61,7 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 - Dev dependency `@particle-academy/react-fancy` moves from `^4.17.1` to
   `^6.28.0`, so the suite runs against the react-fancy consumers install today.
-  The peer range is unchanged (`>=4.17.1`); nothing to do.
+  The peer range gains an upper bound, `>=4.17.1 <7.0`: the suite has run on
+  4.17.1 and 6.28.0, and no react-fancy 7 exists to test against.
 
 - **Docs:** `AGENTS.md` is now the guide to using this package (install, how to find it on the Fancy MCP catalog server once it is listed, API essentials, traps), and it ships in the package. The contributor notes it held moved to `CONTRIBUTING.md`, and `CLAUDE.md` is now a symlink to it. The README points to the MCP server and to `AGENTS.md`. No code changed; nothing to do.
