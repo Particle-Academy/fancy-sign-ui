@@ -34,6 +34,11 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   - `EnvelopeTimeline`, labelling every browser-reported event "reported by the
     signer's browser" and rendering signer-written text as plain text.
   - `CompletionCertificate` and `SignatureVerifier` (shows each named failure).
+  - `OrgSigningSettings`, the organisation admin's per-page initials or
+    signature switch, and `EnvelopeSetup`'s `orgPerPage` prop, which locks the
+    per-page select to it. `client.getOrgSettings()` /
+    `updateOrgSettings()`, the `OrgSettings` type, and the `forbidden` error
+    code.
   - A test that fails if the README uses any forbidden legal claim.
 
 ### Changed

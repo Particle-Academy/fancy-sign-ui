@@ -244,6 +244,7 @@ export interface PublicKey {
 export type SignErrorCode =
   | "invalid_request"
   | "not_found"
+  | "forbidden"
   | "link_invalid"
   | "otp_invalid"
   | "otp_locked"
@@ -282,6 +283,18 @@ export interface FieldDraft {
   anchor: FieldAnchor;
   required: boolean;
   label: string | null;
+}
+
+/**
+ * An organisation's signing settings (`GET`/`PUT {prefix}/org/settings`). When
+ * `per_page` is not `"none"`, every envelope of the org carries it and a
+ * sender cannot change it.
+ */
+export interface OrgSettings {
+  org_id: string;
+  per_page: PerPageMark;
+  updated_by: string | null;
+  updated_at: string | null;
 }
 
 /** The settings a sender may choose in phase 1. `level` and `seal` are fixed. */

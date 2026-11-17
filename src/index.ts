@@ -47,6 +47,9 @@ export type { SignerCeremonyProps, SignerCeremonyState, CeremonyStep, SignBlocke
 export { EnvelopeSetup, initialEnvelopeSetupState, setupProblems } from "./EnvelopeSetup";
 export type { EnvelopeSetupProps, EnvelopeSetupState } from "./EnvelopeSetup";
 
+export { OrgSigningSettings, initialOrgSigningState } from "./OrgSigningSettings";
+export type { OrgSigningSettingsProps, OrgSigningState } from "./OrgSigningSettings";
+
 export { EnvelopeTimeline, CLIENT_EVENT_LABEL, eventTitle } from "./EnvelopeTimeline";
 export type { EnvelopeTimelineProps } from "./EnvelopeTimeline";
 

@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useEffect } from "react";
 import {
   Badge,
   Button,
@@ -76,6 +76,12 @@ export interface EnvelopeSetupProps {
    * undone. Set `false` only when something else already confirmed.
    */
   pendingMode?: boolean;
+  /**
+   * The organisation's per-page setting (`client.getOrgSettings()`). When it is
+   * not `"none"` the per-page select is locked to it, and the state is brought
+   * into line, because the backend refuses an envelope that disagrees.
+   */
+  orgPerPage?: PerPageMark | null;
   /** Make a draft id for a new signer. Default: a random UUID. */
   newSignerId?: () => string;
   /** Most characters in a void reason. Default 1000. */
@@ -100,6 +106,7 @@ export function EnvelopeSetup({
   onSend,
   onVoid,
   pendingMode = true,
+  orgPerPage = null,
   newSignerId = newId,
   maxVoidReason = 1000,
   surfaceId = "envelope-setup",
@@ -116,6 +123,14 @@ export function EnvelopeSetup({
   );
 
   const editable = envelopeStatus === "draft";
+  const orgLocked = orgPerPage !== null && orgPerPage !== "none";
+
+  useEffect(() => {
+    if (orgLocked && editable && latest.current.settings.per_page !== orgPerPage) {
+      update((c) => ({ ...c, settings: { ...c.settings, per_page: orgPerPage } }));
+      emit("settings-from-org", undefined, { per_page: orgPerPage });
+    }
+  }, [orgLocked, orgPerPage, editable, latest, update, emit]);
   const busy = state.status === "busy";
   const problems = setupProblems(state);
 
@@ -278,19 +293,25 @@ export function EnvelopeSetup({
         <Heading as="h3" size="sm">
           Settings
         </Heading>
-        <Select
-          label="Per-page marks"
-          description="Added to every page before the final signature page."
-          list={[
-            { value: "none", label: "None" },
-            { value: "initials", label: "Initials on every page" },
-            { value: "signature", label: "Signature on every page" },
-          ]}
-          value={state.settings.per_page}
-          disabled={!editable || busy}
-          data-fancy-sign-setting="per_page"
-          onValueChange={(v) => setSettings({ per_page: v as PerPageMark })}
-        />
+        <div data-fancy-sign-setting-wrap="per_page" data-fancy-sign-locked={orgLocked ? "org" : undefined}>
+          <Select
+            label="Per-page marks"
+            description={
+              orgLocked
+                ? "Set by your organisation's admin for every envelope. Never on the final signature page."
+                : "Added to every page before the final signature page."
+            }
+            list={[
+              { value: "none", label: "None" },
+              { value: "initials", label: "Initials on every page" },
+              { value: "signature", label: "Signature on every page" },
+            ]}
+            value={orgLocked ? orgPerPage : state.settings.per_page}
+            disabled={!editable || busy || orgLocked}
+            data-fancy-sign-setting="per_page"
+            onValueChange={(v) => setSettings({ per_page: v as PerPageMark })}
+          />
+        </div>
         <Select
           label="Step-up before signing"
           list={[

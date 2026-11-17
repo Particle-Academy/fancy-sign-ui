@@ -45,6 +45,10 @@ published. Find it then with `search-components`.
   `value` / `onChange` (`initialCeremonyState()`). `signBlockers(state)` says
   why Sign is still disabled. `renderPage={(n) => ...}` renders pages yourself
   and enables per-page `page.viewed` beacons.
+- **Organisation:** `<OrgSigningSettings value onChange canEdit onSave />` is
+  the admin's per-page switch (`client.updateOrgSettings({ per_page })`; the
+  backend answers `forbidden` to a non-admin). Pass the saved value to
+  `<EnvelopeSetup orgPerPage>` so a sender sees it locked.
 - **Sender:** `<EnvelopeSetup value onChange envelopeStatus onSend onVoid />`,
   `<SignFieldPalette signers value onChange onPlace />` (emits a `FieldDraft`
   anchored to `final_page`, `every_page` or a document node), and

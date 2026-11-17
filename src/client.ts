@@ -13,8 +13,10 @@ import type {
   Completion,
   Envelope,
   EnvelopeInput,
+  OrgSettings,
   OtpPurpose,
   OtpSent,
+  PerPageMark,
   PublicKey,
   SignClientErrorCode,
   SignErrorCode,
@@ -30,6 +32,7 @@ export type * from "./types";
 const SIGN_ERROR_CODES: ReadonlySet<string> = new Set<SignErrorCode>([
   "invalid_request",
   "not_found",
+  "forbidden",
   "link_invalid",
   "otp_invalid",
   "otp_locked",
@@ -119,6 +122,10 @@ export interface SignClient {
   getDocument(id: string): Promise<Blob>;
   certificateUrl(id: string): string;
   documentUrl(id: string): string;
+  /** The signed-in sender's organisation settings (`not_found` with no organisation). */
+  getOrgSettings(): Promise<OrgSettings>;
+  /** Change them. Only an org admin may (`forbidden` otherwise). */
+  updateOrgSettings(input: { per_page: PerPageMark }): Promise<OrgSettings>;
 
   // Signer (link token, then a session after the view code)
   requestCode(token: string, purpose: OtpPurpose): Promise<OtpSent>;
@@ -212,6 +219,8 @@ export function createSignClient(options: SignClientOptions): SignClient {
     getDocument: (id) => blob(`/envelopes/${enc(id)}/document`),
     certificateUrl: (id) => `${base}/envelopes/${enc(id)}/certificate`,
     documentUrl: (id) => `${base}/envelopes/${enc(id)}/document`,
+    getOrgSettings: () => json("GET", "/org/settings"),
+    updateOrgSettings: (input) => json("PUT", "/org/settings", { json: input }),
 
     requestCode: (token, purpose) =>
       json("POST", signerPath(token, "/otp"), { json: { purpose }, signer: true }),

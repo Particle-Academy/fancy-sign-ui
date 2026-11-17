@@ -139,7 +139,11 @@ import { EnvelopeSetup, SignFieldPalette, EnvelopeTimeline } from "@particle-aca
 ```
 
 `EnvelopeSetup` edits the title, signers (name, email, order) and settings
-(`per_page`, `step_up`, `expires_at`). The level is shown fixed as `SES` and the
+(`per_page`, `step_up`, `expires_at`). Pass `orgPerPage` (from
+`client.getOrgSettings()`) and the per-page select is locked to an
+organisation's setting when its admin has turned one on.
+`<OrgSigningSettings canEdit onSave />` is that admin's switch. The level is
+shown fixed as `SES` and the
 seal as `none`; nothing else is built yet. **Send and Void are staged for
 confirmation by default** (`pendingMode`, default `true`), and Void always needs
 a reason.
