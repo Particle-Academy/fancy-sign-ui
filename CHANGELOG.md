@@ -35,3 +35,7 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
     signer's browser" and rendering signer-written text as plain text.
   - `CompletionCertificate` and `SignatureVerifier` (shows each named failure).
   - A test that fails if the README uses any forbidden legal claim.
+
+### Changed
+
+- **Docs:** `AGENTS.md` is now the guide to using this package (install, how to find it on the Fancy MCP catalog server once it is listed, API essentials, traps), and it ships in the package. The contributor notes it held moved to `CONTRIBUTING.md`, and `CLAUDE.md` is now a symlink to it. The README points to the MCP server and to `AGENTS.md`. No code changed; nothing to do.

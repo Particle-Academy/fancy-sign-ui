@@ -23,6 +23,13 @@ surfaces work against either one:
 
 ---
 
+<!-- fancy-agents-note:start -->
+> **For agents.** This package is not listed on the Fancy MCP catalog server
+> yet. The server, `https://ui.particle.academy/mcp` (streamable HTTP, no API key; MCP id
+> `fancy-ui`), lists the released Fancy packages with install commands and
+> docs. How an agent installs and uses this package is in [AGENTS.md](https://github.com/Particle-Academy/fancy-sign-ui/blob/main/AGENTS.md).
+<!-- fancy-agents-note:end -->
+
 ## Install
 
 ```bash
@@ -198,15 +205,6 @@ notice, and set a retention period on the backend.
 A drawn signature is `{ kind: "drawn", strokes }`, points normalised to `[0, 1]`
 with y pointing down, capped at 64 strokes and 2048 points. A typed one is
 `{ kind: "typed", text }`, at most 128 characters. **It is never an image.**
-
-## Development
-
-```bash
-npm install
-npm test       # builds, then vitest (jsdom)
-npm run lint   # tsc --noEmit && eslint .
-npm run build  # tsup
-```
 
 ## License
 
