@@ -93,6 +93,32 @@ export interface SignClientOptions {
   headers?: Record<string, string>;
   /** `fetch` credentials mode. Default `"same-origin"`. */
   credentials?: RequestCredentials;
+  /**
+   * Send the `XSRF-TOKEN` cookie back as `X-XSRF-TOKEN` on every POST and PUT
+   * to the page's own origin, read fresh each time. Laravel's `web` middleware
+   * (the default `sender_middleware`) refuses a state-changing request without
+   * it. Default `true`; nothing is sent when there is no such cookie.
+   */
+  xsrf?: boolean;
+}
+
+/** The XSRF-TOKEN cookie, decoded, when there is a document and the URL is on its origin. */
+function xsrfToken(url: string): string | null {
+  const doc = (globalThis as { document?: { cookie?: string; baseURI?: string } }).document;
+  if (!doc || typeof doc.cookie !== "string") return null;
+  try {
+    const page = new URL(doc.baseURI ?? "");
+    if (new URL(url, page).origin !== page.origin) return null;
+  } catch {
+    return null;
+  }
+  const pair = doc.cookie.split("; ").find((c) => c.startsWith("XSRF-TOKEN="));
+  if (!pair) return null;
+  try {
+    return decodeURIComponent(pair.slice("XSRF-TOKEN=".length));
+  } catch {
+    return null;
+  }
 }
 
 /** What `verify` uploads. Files as picked, or already-parsed JSON. */
@@ -176,6 +202,10 @@ export function createSignClient(options: SignClientOptions): SignClient {
     }
     if (init.signer && session) {
       headers[SESSION_HEADER] = session;
+    }
+    if (method !== "GET" && options.xsrf !== false) {
+      const token = xsrfToken(`${base}${path}`);
+      if (token !== null) headers["X-XSRF-TOKEN"] = token;
     }
 
     let response: Response;

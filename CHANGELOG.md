@@ -42,6 +42,10 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   - The client reads the kit-wide error envelope (CC-fancy-0031): the code at
     the top level, or on a 422 (`validation_failed`) from its one item, and
     keeps `requestId` on the `SignError`.
+  - The client sends Laravel's `XSRF-TOKEN` cookie back as `X-XSRF-TOKEN` on
+    every POST and PUT to the page's own origin, read fresh each time, so the
+    sender routes work behind the default `web` middleware (`xsrf: false` turns
+    it off).
   - A test that fails if the README uses any forbidden legal claim.
 
 ### Changed
