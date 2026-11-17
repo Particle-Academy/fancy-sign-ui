@@ -3,8 +3,10 @@
  * wire contract. **React-free**, so a Vue, Svelte or vanilla frontend can use it
  * without React in its tree (`tests/packaging.test.ts` asserts that).
  *
- * One function per endpoint. Every non-2xx answer becomes a `SignError` whose
- * `code` is from the closed `SignErrorCode` set, or one the client names itself
+ * One function per endpoint. Every non-2xx answer is the kit-wide error
+ * envelope (CC-fancy-0031): `{error, message, errors?, requestId}`, a 422 being
+ * `validation_failed` with the fancy-sign code as its one item. It becomes a
+ * `SignError` whose `code` is from the closed `SignErrorCode` set, or one the client names itself
  * (`network_error`, `server_error`, `unknown_error`). A code outside the closed
  * set is never passed through as if it were in it: a UI branching on
  * `otp_locked` must not be fooled by a backend inventing `otp_lockedout`.
@@ -61,18 +63,22 @@ export class SignError extends Error {
   readonly status: number;
   /** The raw code from the body, when one arrived but was not in the closed set. */
   readonly serverCode?: string;
+  /** The envelope's `requestId`, to quote when reporting a problem. */
+  readonly requestId?: string;
 
   constructor(
     code: SignErrorCode | SignClientErrorCode,
     message: string,
     status: number,
     serverCode?: string,
+    requestId?: string,
   ) {
     super(message);
     this.name = "SignError";
     this.code = code;
     this.status = status;
     if (serverCode !== undefined) this.serverCode = serverCode;
+    if (requestId !== undefined) this.requestId = requestId;
   }
 }
 
@@ -286,20 +292,24 @@ async function toError(response: Response): Promise<SignError> {
   } catch {
     parsed = null;
   }
-  const error =
-    parsed && typeof parsed === "object" && "error" in parsed
-      ? (parsed as { error?: { code?: unknown; message?: unknown } }).error
-      : undefined;
-  const code = error?.code;
-  const message = typeof error?.message === "string" && error.message.length > 0 ? error.message : `HTTP ${status}`;
+  // The kit-wide error envelope. A 422 is validation_failed: the fancy-sign
+  // code is its one item. Anything else carries the code at the top level.
+  const body = parsed && typeof parsed === "object" && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : {};
+  const top = typeof body.error === "string" ? body.error : undefined;
+  const items = Array.isArray(body.errors) ? body.errors : [];
+  const item = top === "validation_failed" && items[0] && typeof items[0] === "object" ? (items[0] as Record<string, unknown>) : undefined;
+  const code = item ? (typeof item.error === "string" ? item.error : undefined) : top;
+  const text = item && typeof item.message === "string" ? item.message : body.message;
+  const message = typeof text === "string" && text.length > 0 ? text : `HTTP ${status}`;
+  const requestId = typeof body.requestId === "string" ? body.requestId : undefined;
 
   if (isSignErrorCode(code)) {
-    return new SignError(code, message, status);
+    return new SignError(code, message, status, undefined, requestId);
   }
   if (status >= 500) {
-    return new SignError("server_error", message, status, typeof code === "string" ? code : undefined);
+    return new SignError("server_error", message, status, code, requestId);
   }
-  return new SignError("unknown_error", message, status, typeof code === "string" ? code : undefined);
+  return new SignError("unknown_error", message, status, code, requestId);
 }
 
 /** Map anything thrown into the plain object surfaces keep in state. */

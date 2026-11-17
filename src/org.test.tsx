@@ -20,7 +20,7 @@ describe("client: organisation settings", () => {
     const fetchImpl = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       calls.push({ url: String(input), method: init?.method ?? "GET", body: init?.body });
       if (calls.length === 3) {
-        return new Response(JSON.stringify({ error: { code: "forbidden", message: "no" } }), { status: 403 });
+        return new Response(JSON.stringify({ error: "forbidden", message: "no", requestId: "req-9" }), { status: 403 });
       }
       return new Response(JSON.stringify({ org_id: "org-1", per_page: "initials", updated_by: "user:1", updated_at: null }), { status: 200 });
     }) as unknown as typeof fetch;

@@ -77,8 +77,10 @@ try {
 }
 ```
 
-One method per endpoint. Every 4xx body (`{ "error": { "code", "message" } }`)
-becomes a `SignError` whose `code` is from the closed set (`otp_invalid`,
+One method per endpoint. Every refusal is the kit-wide error envelope
+(`{ "error", "message", "requestId" }`; on a 422, `"error": "validation_failed"`
+with the fancy-sign code as its one item in `errors`) and becomes a `SignError`
+whose `requestId` is kept and whose `code` is from the closed set (`otp_invalid`,
 `otp_locked`, `consent_required`, `fields_incomplete`, ...). A code outside that
 set is reported as `unknown_error` with the raw value in `serverCode`, so a UI
 branching on `otp_locked` cannot be fooled by a code it does not know. No

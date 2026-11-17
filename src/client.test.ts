@@ -27,13 +27,51 @@ function stubFetch(responses: Array<{ status: number; body?: unknown; type?: str
   return { fetchImpl: fetchImpl as unknown as typeof fetch, calls };
 }
 
+/** The kit-wide error envelope (CC-fancy-0031) for a non-422 refusal. */
 function errorBody(code: string, message = "nope") {
-  return { error: { code, message } };
+  return { error: code, message, requestId: "req-1" };
+}
+
+/** A 422: validation_failed, with the fancy-sign code as its one item. */
+function validationBody(code: string, message = "nope") {
+  return { error: "validation_failed", message, errors: [{ error: code, message }], requestId: "req-422" };
 }
 
 describe("error mapping (failure paths first)", () => {
+  it("reads a 422's fancy-sign code from its one item, and keeps the request id", async () => {
+    const { fetchImpl } = stubFetch([{ status: 422, body: validationBody("fields_incomplete", "Complete every field.") }]);
+    const client = createSignClient({ baseUrl: "https://app.example.com/fancy-sign", fetch: fetchImpl });
+    const failure = (await client.getEnvelope("e1").catch((e: unknown) => e)) as SignError;
+    expect(failure.code).toBe("fields_incomplete");
+    expect(failure.message).toBe("Complete every field.");
+    expect(failure.requestId).toBe("req-422");
+  });
+
+  it("keeps the request id of a top-level code", async () => {
+    const { fetchImpl } = stubFetch([{ status: 404, body: errorBody("link_invalid", "This link is not valid.") }]);
+    const client = createSignClient({ baseUrl: "https://app.example.com/fancy-sign", fetch: fetchImpl });
+    const failure = (await client.getEnvelope("e1").catch((e: unknown) => e)) as SignError;
+    expect(failure.code).toBe("link_invalid");
+    expect(failure.requestId).toBe("req-1");
+  });
+
+  it("does not trust a 422 item code outside the closed set", async () => {
+    const { fetchImpl } = stubFetch([{ status: 422, body: validationBody("otp_wrong") }]);
+    const client = createSignClient({ baseUrl: "https://app.example.com/fancy-sign", fetch: fetchImpl });
+    const failure = (await client.getEnvelope("e1").catch((e: unknown) => e)) as SignError;
+    expect(failure.code).toBe("unknown_error");
+    expect(failure.serverCode).toBe("otp_wrong");
+  });
+
+  it("does not read the retired nested {error: {code}} shape as a known code", async () => {
+    const { fetchImpl } = stubFetch([{ status: 404, body: { error: { code: "not_found", message: "old" } } }]);
+    const client = createSignClient({ baseUrl: "https://app.example.com/fancy-sign", fetch: fetchImpl });
+    const failure = (await client.getEnvelope("e1").catch((e: unknown) => e)) as SignError;
+    expect(failure.code).toBe("unknown_error");
+  });
+
   it("maps otp_invalid to a SignError with that code and the status", async () => {
-    const { fetchImpl } = stubFetch([{ status: 422, body: errorBody("otp_invalid", "Invalid code.") }]);
+    const { fetchImpl } = stubFetch([{ status: 422, body: validationBody("otp_invalid", "Invalid code.") }]);
     const client = createSignClient({ baseUrl: "https://app.example.com/fancy-sign", fetch: fetchImpl });
     const failure = await client.verifyViewCode("tok", "123456").catch((e: unknown) => e);
     expect(failure).toBeInstanceOf(SignError);
@@ -52,7 +90,7 @@ describe("error mapping (failure paths first)", () => {
 
   it("maps otp_invalid and otp_locked on sign (the accept code) the same way", async () => {
     const { fetchImpl } = stubFetch([
-      { status: 422, body: errorBody("otp_invalid") },
+      { status: 422, body: validationBody("otp_invalid") },
       { status: 429, body: errorBody("otp_locked") },
     ]);
     const client = createSignClient({ baseUrl: "https://app.example.com/fancy-sign", fetch: fetchImpl, session: "s1" });
@@ -63,7 +101,7 @@ describe("error mapping (failure paths first)", () => {
 
   it("maps every code in the closed set through unchanged", async () => {
     const codes = [
-      "invalid_request", "not_found", "link_invalid", "otp_invalid", "otp_locked", "otp_rate_limited",
+      "invalid_request", "not_found", "forbidden", "link_invalid", "otp_invalid", "otp_locked", "otp_rate_limited",
       "session_required", "consent_required", "not_viewed", "fields_incomplete", "mark_invalid",
       "envelope_not_open", "envelope_not_draft", "already_signed", "already_declined",
       "step_up_required", "limit_exceeded",

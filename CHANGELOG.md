@@ -39,6 +39,9 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
     per-page select to it. `client.getOrgSettings()` /
     `updateOrgSettings()`, the `OrgSettings` type, and the `forbidden` error
     code.
+  - The client reads the kit-wide error envelope (CC-fancy-0031): the code at
+    the top level, or on a 422 (`validation_failed`) from its one item, and
+    keeps `requestId` on the `SignError`.
   - A test that fails if the README uses any forbidden legal claim.
 
 ### Changed
