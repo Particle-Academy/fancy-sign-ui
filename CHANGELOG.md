@@ -11,9 +11,11 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-11-18
+
 ### Added
 
-- First version (0.1.0, not yet released). React surfaces for the fancy-sign
+- First version. React surfaces for the fancy-sign
   phase 1 wire contract, built from react-fancy:
   - `createSignClient` on a React-free `./client` subpath: one typed method per
     endpoint, every 4xx mapped to a `SignError` with the closed `code` set
@@ -56,5 +58,9 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   - A test that fails if the README uses any forbidden legal claim.
 
 ### Changed
+
+- Dev dependency `@particle-academy/react-fancy` moves from `^4.17.1` to
+  `^6.28.0`, so the suite runs against the react-fancy consumers install today.
+  The peer range is unchanged (`>=4.17.1`); nothing to do.
 
 - **Docs:** `AGENTS.md` is now the guide to using this package (install, how to find it on the Fancy MCP catalog server once it is listed, API essentials, traps), and it ships in the package. The contributor notes it held moved to `CONTRIBUTING.md`, and `CLAUDE.md` is now a symlink to it. The README points to the MCP server and to `AGENTS.md`. No code changed; nothing to do.
