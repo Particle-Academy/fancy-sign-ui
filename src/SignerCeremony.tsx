@@ -150,8 +150,19 @@ export interface SignerCeremonyProps {
    * observe, and inventing them would overstate the evidence).
    */
   renderPage?: (page: number) => ReactNode;
-  /** A URL for the as-sent PDF (e.g. an object URL the host made). Default: fetched through the client. */
+  /**
+   * A URL to SHOW for the as-sent PDF instead of the fetched one. The ceremony
+   * still opens the document through the signer's session, in every mode: that
+   * fetch is the server-observed `document.opened`, and signing is refused
+   * (`not_viewed`) without it.
+   */
   documentUrl?: string;
+  /**
+   * The as-sent PDF bytes, once opened through the session. A host rendering
+   * its own pages (`renderPage`) renders them from these, so the signer sees
+   * exactly the bytes the server recorded as opened.
+   */
+  onDocument?: (pdf: Blob) => void;
   /** Minimum time on screen before a page counts as viewed. Default 1500 ms. */
   minDwellMs?: number;
   /** Minimum time between two reports for the same page. Default 30000 ms. */
@@ -182,6 +193,7 @@ export function SignerCeremony({
   defaultValue,
   renderPage,
   documentUrl,
+  onDocument,
   minDwellMs = 1500,
   pageViewIntervalMs = 30000,
   maxPageViewReports = 200,
@@ -381,20 +393,31 @@ export function SignerCeremony({
     };
   }, [observing, pageCount]);
 
-  // --- the as-sent PDF, when the host renders no pages ---------------------
+  // --- the as-sent PDF, opened through the session in every mode ----------
+  //
+  // The server records `document.opened` when the signer's session fetches the
+  // as-sent PDF, and refuses to sign until it has. So it is fetched whatever
+  // the host shows: the ceremony's own viewer, the host's `renderPage`, or the
+  // host's `documentUrl`. Once per ceremony.
 
   const [fetchedUrl, setFetchedUrl] = useState<string | null>(null);
-  const wantsPdf = state.step === "review" && !renderPage && !documentUrl;
+  const opening = state.step === "review";
+  const showsPdf = !renderPage && !documentUrl;
+  const onDocumentRef = useRef(onDocument);
+  onDocumentRef.current = onDocument;
   useEffect(() => {
-    if (!wantsPdf || typeof URL === "undefined" || typeof URL.createObjectURL !== "function") return;
+    if (!opening) return;
     let cancelled = false;
     let url: string | null = null;
     client
       .signerDocument(token)
       .then((blob) => {
         if (cancelled) return;
-        url = URL.createObjectURL(blob);
-        setFetchedUrl(url);
+        onDocumentRef.current?.(blob);
+        if (showsPdf && typeof URL !== "undefined" && typeof URL.createObjectURL === "function") {
+          url = URL.createObjectURL(blob);
+          setFetchedUrl(url);
+        }
       })
       .catch((err) => {
         if (!cancelled) fail(err);
@@ -403,9 +426,10 @@ export function SignerCeremony({
       cancelled = true;
       if (url) URL.revokeObjectURL(url);
     };
-    // `fail` is stable enough; re-fetching on its identity would refetch the PDF.
+    // `fail` and `showsPdf` are read once per opening; re-fetching on their
+    // identity would open the document again.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [wantsPdf, client, token]);
+  }, [opening, client, token]);
 
   // --- render --------------------------------------------------------------
 

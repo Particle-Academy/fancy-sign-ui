@@ -404,6 +404,39 @@ describe("document viewer", () => {
     expect(client.signerDocument).toHaveBeenCalledWith("tok");
     expect(client.reportPageView).not.toHaveBeenCalled();
   });
+
+  // The server records `document.opened` when the as-sent PDF is fetched
+  // through the signer's session, and refuses to sign (`not_viewed`) until
+  // then. So the ceremony must open it in EVERY display mode, not only when it
+  // shows the PDF itself, or a host rendering its own pages can never sign.
+  it("opens the as-sent PDF through the session when the host renders the pages, and hands the bytes over", async () => {
+    const client = fakeClient();
+    const received: Blob[] = [];
+    render(
+      <Harness client={client} token="tok" initial={reviewState()} renderPage={(n) => <span>page {n}</span>} onDocument={(pdf) => received.push(pdf)} />,
+    );
+    await waitFor(() => expect(client.signerDocument).toHaveBeenCalledTimes(1));
+    expect(client.signerDocument).toHaveBeenCalledWith("tok");
+    await waitFor(() => expect(received).toHaveLength(1));
+    expect(document.querySelector('[data-fancy-sign-document="pdf"]')).toBeNull();
+  });
+
+  it("opens it when the host passes its own documentUrl too, and shows the host's URL", async () => {
+    const client = fakeClient();
+    render(<Harness client={client} token="tok" initial={reviewState()} documentUrl="https://cdn.example.com/q.pdf" />);
+    await waitFor(() => expect(client.signerDocument).toHaveBeenCalledTimes(1));
+    expect(document.querySelector('[data-fancy-sign-document="pdf"]')).not.toBeNull();
+    expect(document.querySelector('[data-fancy-sign-document="pdf"]')?.innerHTML).toContain("https://cdn.example.com/q.pdf");
+  });
+
+  it("opens it once, not on every render", async () => {
+    const client = fakeClient();
+    const { rerender } = render(<Harness client={client} token="tok" initial={reviewState()} renderPage={(n) => <span>page {n}</span>} />);
+    await waitFor(() => expect(client.signerDocument).toHaveBeenCalledTimes(1));
+    rerender(<Harness client={client} token="tok" initial={reviewState()} renderPage={(n) => <span>page {n} again</span>} />);
+    await new Promise((r) => setTimeout(r, 20));
+    expect(client.signerDocument).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe("uncontrolled", () => {

@@ -46,6 +46,13 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
     every POST and PUT to the page's own origin, read fresh each time, so the
     sender routes work behind the default `web` middleware (`xsrf: false` turns
     it off).
+  - `SignerCeremony` opens the as-sent PDF through the signer's session in
+    every display mode, once: with its own viewer, with the host's
+    `renderPage`, and with the host's `documentUrl`. That fetch is the
+    server-observed `document.opened`, and the server refuses to sign
+    (`not_viewed`) without it; before this, a host rendering its own pages
+    could never sign. `onDocument(pdf)` hands the host the exact bytes to
+    render pages from.
   - A test that fails if the README uses any forbidden legal claim.
 
 ### Changed

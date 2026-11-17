@@ -117,9 +117,11 @@ const [state, setState] = useState(initialCeremonyState());
 page is then observed, and a `page.viewed` beacon (page and time on screen) is
 sent once it has been on screen for `minDwellMs` (default 1500 ms), at most once
 per page per `pageViewIntervalMs` (default 30 s) and at most
-`maxPageViewReports` times (default 200). Without `renderPage`, the as-sent PDF
-is fetched through the session and shown whole, and **no** per-page claim is
-made. These beacons are claims from the signer's browser, and every surface here
+`maxPageViewReports` times (default 200). Render the pages from the bytes
+`onDocument(pdf)` hands you. Without `renderPage`, the PDF is shown whole, and
+**no** per-page claim is made. In every mode the ceremony opens the as-sent PDF
+through the signer's session once: that is the server-observed
+`document.opened`, and signing is refused until it has happened. These beacons are claims from the signer's browser, and every surface here
 labels them as such.
 
 ### The sender
