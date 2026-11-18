@@ -69,6 +69,26 @@ published. Find it then with `search-components`.
   JSON-serialisable), `data-fancy-sign-*` handles on every interactive element,
   and an optional `onActivity` callback per mutation.
 
+### Signing fields in the document builder (`./template`)
+
+```tsx
+import { TemplateBuilder } from "@particle-academy/fancy-template-ui";
+import { signBlockKinds } from "@particle-academy/fancy-sign-ui/template";
+
+<TemplateBuilder kinds={signBlockKinds([{ id: "client", label: "Client" }])} ... />
+```
+
+- Three kinds: `fancy-sign:signature`, `fancy-sign:initials`,
+  `fancy-sign:date-signed`. Props: `id` (unique in the document,
+  `^[A-Za-z0-9_-]{1,64}$`), `signer` (one of the ids you passed), `required`,
+  optional `label`.
+- They cannot go inside a repeating section: a repeat would print one id
+  several times.
+- Write the rendered document with `FinePrint\Writer\Signable::write($doc)`,
+  not `Agent::toBytes()`: only the signing writer accepts field nodes, and it
+  returns where each field landed. Validate with `Agent::validate($doc, ['fields' => true])`.
+- Needs `@particle-academy/fancy-template-ui` installed (an optional peer).
+
 ## Traps
 
 - **An agent cannot sign.** Verifying a code, accepting consent, adopting a

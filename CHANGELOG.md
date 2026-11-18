@@ -11,6 +11,20 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Added
+
+- **`./template`: signing fields for the document builder.** `signBlockKinds(signers)`
+  returns three host block kinds for `@particle-academy/fancy-template-ui`:
+  `fancy-sign:signature`, `fancy-sign:initials` and `fancy-sign:date-signed`.
+  Each renders fine-print's opt-in field node (`signatureField`,
+  `initialsField`, `dateSignedField`) with an id, a signer, `required` and an
+  optional label, and has its own settings panel. None can be placed in a
+  repeating section, because a field id must be unique. Write the rendered
+  document with fine-print's `FinePrint\Writer\Signable::write()`, which
+  accepts field nodes and returns where each one landed. fancy-template-ui is an
+  optional peer used for types only; the main entry is unchanged. This replaces
+  the fancy-cms islands planned for field placement, which were never built.
+
 ## [0.2.0] - 2026-11-18
 
 ### Added
