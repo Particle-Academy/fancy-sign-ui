@@ -11,6 +11,11 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-18
+
+**What a consumer must do.** Nothing. `./template` is a new entry; the main entry is
+unchanged. Use it only with `@particle-academy/fancy-template-ui` 0.1.0 or later.
+
 ### Added
 
 - **`./template`: signing fields for the document builder.** `signBlockKinds(signers)`
@@ -25,6 +30,12 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   optional peer used for types only; the main entry is unchanged. This replaces
   the fancy-cms islands planned for field placement, which were never built.
 
+
+### Changed
+
+- **Tested against react-fancy 6.29.0** (the dev dependency was `^6.28.0`):
+  fancy-template-ui, the new dev dependency for `./template`'s tests, needs it.
+  Dev only; the peer range is unchanged.
 ## [0.2.0] - 2026-11-18
 
 ### Added
