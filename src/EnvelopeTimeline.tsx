@@ -26,6 +26,7 @@ const EVENT_TITLE: Record<string, string> = {
   "mark.adopted": "Signature adopted",
   "signer.signed": "Signed",
   "signer.declined": "Declined",
+  "signer.requested_changes": "Changes requested",
   "reminder.sent": "Reminder sent",
   "envelope.completed": "Envelope completed",
   "envelope.voided": "Envelope voided",
@@ -38,6 +39,7 @@ const EVENT_COLOR: Record<string, "green" | "red" | "amber" | "blue" | "zinc"> =
   "signer.signed": "green",
   "envelope.completed": "green",
   "signer.declined": "red",
+  "signer.requested_changes": "amber",
   "envelope.voided": "red",
   "otp.locked": "red",
   "otp.failed": "amber",
@@ -114,7 +116,13 @@ export function EnvelopeTimeline({
       ) : (
         <Timeline animated={false}>
           {ordered.map((event) => {
-            const reason = event.type === "signer.declined" || event.type === "envelope.voided" ? str(event.data?.reason) : null;
+            // Signer- and sender-written text: rendered as a text node, never as HTML.
+            const reason =
+              event.type === "signer.declined" || event.type === "envelope.voided"
+                ? str(event.data?.reason)
+                : event.type === "signer.requested_changes"
+                  ? str(event.data?.text)
+                  : null;
             const detail = summary(event);
             const client = event.source === "client";
             return (

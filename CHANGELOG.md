@@ -11,6 +11,28 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-18
+
+### Added
+
+- **Request changes** (owner-approved q_8c180eab; needs fancy-sign 0.3.0 or
+  later on the server). `SignerCeremony` shows **Request changes** beside
+  Decline: a required message, bounded by `maxDeclineReason` like a decline
+  reason, sent with `client.requestChanges(token, text)`. The ceremony stays in
+  review afterwards, so the signer can still sign or decline, and the button is
+  disabled with a note once `view.max_change_requests` is reached. A refusal
+  keeps the typed message. The activity event `changes-requested` carries the
+  count, never the text.
+- `EnvelopeTimeline` labels `signer.requested_changes` "Changes requested" and
+  shows its text as plain text.
+- Types: `signer.requested_changes` in `SignEventType`;
+  `SignerView.changes_requested` and `max_change_requests` (optional, so a
+  0.1/0.2 server still type-checks); `SignerCeremonyState.requestingChanges`,
+  `changesText` and `changesSent` (optional, so a stored 0.1.0 state still loads).
+- **Consumer action:** none. Against a fancy-sign server before 0.3.0 the
+  button shows and its request answers 404 (`unknown_error`); upgrade the server
+  with this package.
+
 ### Changed
 
 - **CI: the lab-certificate gate verifies against the lab's rotated key list.**

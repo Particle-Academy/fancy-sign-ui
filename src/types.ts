@@ -125,6 +125,7 @@ export type SignEventType =
   | "mark.adopted"
   | "signer.signed"
   | "signer.declined"
+  | "signer.requested_changes"
   | "reminder.sent"
   | "envelope.completed"
   | "envelope.voided"
@@ -222,6 +223,10 @@ export interface SignerView {
   adoption_text: string;
   /** This signer's fields only, with placement. */
   fields: Field[];
+  /** How many times this signer has asked for changes (fancy-sign 0.3.0 and later). */
+  changes_requested?: number;
+  /** How many times a signer may ask for changes (fancy-sign 0.3.0 and later). */
+  max_change_requests?: number;
 }
 
 export interface OtpSent {

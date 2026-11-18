@@ -168,6 +168,8 @@ export interface SignClient {
   reportPageView(token: string, page: number, ms: number): Promise<void>;
   sign(token: string, input: SignInput): Promise<SignerView>;
   decline(token: string, reason: string): Promise<SignerView>;
+  /** Ask the sender for changes. The envelope stays open (fancy-sign 0.3.0 and later). */
+  requestChanges(token: string, text: string): Promise<SignerView>;
 
   // Public
   verify(input: VerifyInput): Promise<VerifyResult>;
@@ -280,6 +282,8 @@ export function createSignClient(options: SignClientOptions): SignClient {
     sign: (token, input) => json("POST", signerPath(token, "/sign"), { json: input, signer: true }),
     decline: (token, reason) =>
       json("POST", signerPath(token, "/decline"), { json: { reason }, signer: true }),
+    requestChanges: (token, text) =>
+      json("POST", signerPath(token, "/request-changes"), { json: { text }, signer: true }),
 
     verify: async (input) => {
       // The PDF is the one file part. The completion and events are string

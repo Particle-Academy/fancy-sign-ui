@@ -42,6 +42,11 @@ export interface SignerCeremonyState {
   acceptCode: string;
   declining: boolean;
   declineReason: string;
+  /** The request-changes message is open (fancy-sign 0.3.0 and later). */
+  requestingChanges?: boolean;
+  changesText?: string;
+  /** Requests sent from THIS ceremony; the server's count is `view.changes_requested`. */
+  changesSent?: number;
   /** Pages reported as viewed (a claim from this browser, not proof of reading). */
   viewedPages: number[];
   status: "idle" | "busy" | "error";
@@ -61,6 +66,9 @@ export function initialCeremonyState(): SignerCeremonyState {
     acceptCode: "",
     declining: false,
     declineReason: "",
+    requestingChanges: false,
+    changesText: "",
+    changesSent: 0,
     viewedPages: [],
     status: "idle",
     error: null,
@@ -325,6 +333,32 @@ export function SignerCeremony({
     emit("decline-cancelled");
   };
 
+  const startRequestChanges = () => {
+    update((c) => ({ ...c, requestingChanges: true, declining: false, error: null }));
+    emit("request-changes-started");
+  };
+
+  const cancelRequestChanges = () => {
+    update((c) => ({ ...c, requestingChanges: false, changesText: "" }));
+    emit("request-changes-cancelled");
+  };
+
+  const requestChanges = async () => {
+    const current = latest.current;
+    const text = (current.changesText ?? "").trim();
+    if (text.length === 0) return;
+    busy();
+    try {
+      const next = await client.requestChanges(token, text);
+      // The envelope stays open: back to review, the signer can still sign or decline.
+      update((c) => ({ ...c, view: next, requestingChanges: false, changesText: "", changesSent: (c.changesSent ?? 0) + 1, status: "idle", error: null }));
+      // Never the text: activity events carry no signer-written content.
+      emit("changes-requested", current.view?.envelope.id, { count: next.changes_requested ?? null });
+    } catch (err) {
+      fail(err);
+    }
+  };
+
   const decline = async () => {
     const current = latest.current;
     const reason = current.declineReason.trim();
@@ -436,6 +470,8 @@ export function SignerCeremony({
   const view = state.view;
   const isBusy = state.status === "busy";
   const blockers = signBlockers(state);
+  const changesCapped =
+    typeof view?.max_change_requests === "number" && (view.changes_requested ?? 0) >= view.max_change_requests;
   const pdfUrl = documentUrl ?? fetchedUrl;
 
   return (
@@ -636,6 +672,17 @@ export function SignerCeremony({
               >
                 Sign
               </Button>
+              {!state.declining && !state.requestingChanges ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  disabled={isBusy || changesCapped}
+                  data-fancy-sign-action="start-request-changes"
+                  onClick={startRequestChanges}
+                >
+                  Request changes
+                </Button>
+              ) : null}
               {!state.declining ? (
                 <Button
                   type="button"
@@ -648,6 +695,57 @@ export function SignerCeremony({
                 </Button>
               ) : null}
             </div>
+
+            {changesCapped ? (
+              <Text size="sm" color="muted" data-fancy-sign-changes-cap="">
+                You have asked for changes as many times as this envelope allows. You can still sign or decline.
+              </Text>
+            ) : null}
+
+            {(state.changesSent ?? 0) > 0 && !state.requestingChanges ? (
+              <div data-fancy-sign-changes-sent={String(state.changesSent)}>
+                <Callout color="blue">
+                  Your request was sent to the sender. You can still sign this version or decline it.
+                </Callout>
+              </div>
+            ) : null}
+
+            {state.requestingChanges ? (
+              <div role="group" aria-label="Request changes" className="fancy-sign-ceremony__decline">
+                <Textarea
+                  label="What should change?"
+                  required
+                  value={state.changesText ?? ""}
+                  maxLength={maxDeclineReason}
+                  disabled={isBusy}
+                  data-fancy-sign-changes-text=""
+                  onChange={(event) =>
+                    update((c) => ({ ...c, changesText: event.target.value.slice(0, maxDeclineReason) }))
+                  }
+                />
+                <div className="fancy-sign-ceremony__actions">
+                  <Button
+                    type="button"
+                    color="blue"
+                    loading={isBusy}
+                    disabled={isBusy || (state.changesText ?? "").trim().length === 0}
+                    data-fancy-sign-action="confirm-request-changes"
+                    onClick={() => void requestChanges()}
+                  >
+                    Send request
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    disabled={isBusy}
+                    data-fancy-sign-action="cancel-request-changes"
+                    onClick={cancelRequestChanges}
+                  >
+                    Go back
+                  </Button>
+                </div>
+              </div>
+            ) : null}
 
             {state.declining ? (
               <div role="group" aria-label="Decline to sign" className="fancy-sign-ceremony__decline">

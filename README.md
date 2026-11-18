@@ -100,7 +100,11 @@ import { SignerCeremony } from "@particle-academy/fancy-sign-ui";
 The flow: request a view code, enter the 6 digits; agree to sign electronically
 (the host's disclosure text, sent back with its version); read the document; fill
 the fields; draw or type a signature; request a fresh signing code; **Sign**. Or
-**Decline**, which requires a reason.
+**Decline**, which requires a reason. Or **Request changes** (with fancy-sign
+0.3.0 or later): a required message to the sender, bounded like a decline
+reason, after which the envelope stays open and the signer can still sign or
+decline. The button is disabled, with a note, once the signer has asked
+`max_change_requests` times.
 
 Sign stays disabled until consent is recorded, every required field is
 complete, a signature exists, and a 6-digit signing code is entered.
@@ -186,12 +190,12 @@ settings, fields), propose a send, a void or a reminder for a human to confirm,
 and verify a completed document.
 
 **What an agent cannot do, by design:** verify a code, accept consent, adopt a
-signature, sign, or decline. Those acts belong to the signer, and an agent able
+signature, sign, decline, or request changes. Those acts belong to the signer, and an agent able
 to do them would empty the evidence of meaning. No prop, handle or callback here
 completes them, and activity events never carry a one-time code or signature
 points.
 
-**Signer-written text** (a decline reason, a typed name) is rendered as plain
+**Signer-written text** (a decline reason, a request for changes, a typed name) is rendered as plain
 text, never as HTML.
 
 ## Personal data

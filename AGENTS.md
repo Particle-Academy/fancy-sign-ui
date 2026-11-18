@@ -41,6 +41,13 @@ published. Find it then with `search-components`.
   is `unknown_error` with the raw value in `serverCode`; no response is
   `network_error`; a 5xx is `server_error`. Also every wire type (`Envelope`,
   `Signer`, `Field`, `Mark`, `SignEvent`, `Completion`, `VerifyResult`, ...).
+- **Request changes:** the ceremony shows **Request changes** beside Decline
+  (`data-fancy-sign-action="start-request-changes"`, the message in
+  `data-fancy-sign-changes-text`, sent by `confirm-request-changes`). It needs
+  fancy-sign 0.3.0 or later on the server (`client.requestChanges(token,
+  text)`), keeps the ceremony in review, and is disabled at the cap
+  (`view.max_change_requests`). The timeline shows `signer.requested_changes`
+  with its text as plain text. No agent tool sends one: it is the signer's act.
 - **Signer:** `<SignerCeremony token client />`, optionally controlled with
   `value` / `onChange` (`initialCeremonyState()`). `signBlockers(state)` says
   why Sign is still disabled. `renderPage={(n) => ...}` renders pages yourself
