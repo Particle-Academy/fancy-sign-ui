@@ -11,6 +11,8 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-18
+
 **What a consumer must do.** If your host reads the error banner at the top of
 `SignerCeremony` to detect a failed panel action (a wrong signing code, a refused
 decline or change request), read `[data-fancy-sign-error]` instead: those errors
