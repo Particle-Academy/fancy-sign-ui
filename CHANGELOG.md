@@ -11,6 +11,8 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-11-19
+
 **Nothing changes unless an envelope is in data mode** (fancy-sign 0.7,
 `settings.mode: "data"`); every new wire field is optional, so this release
 keeps reading older backends. One type widened (see Changed).
