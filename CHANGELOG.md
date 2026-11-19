@@ -15,7 +15,7 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 **Nothing changes unless an envelope is in data mode** (fancy-sign 0.7,
 `settings.mode: "data"`); every new wire field is optional, so this release
-keeps reading older backends. One type widened (see Changed).
+keeps reading older backends. Three type changes (see Changed): two are breaking for code that implements `SignClient` itself or reads `Envelope.completion`.
 
 ### Added
 
@@ -69,6 +69,22 @@ keeps reading older backends. One type widened (see Changed).
   no anchor) and `SignerView.envelope.pages` is optional (a data-mode view has
   none). A host that reads `field.anchor` with an `in` check adds a null check;
   nothing changes at runtime for a pdf envelope.
+- **BREAKING (types): `SignClient` gained five required methods**: `signerData`,
+  `reportRendered`, `inviteSigner`, `getSignatures` and `attachFinal`.
+  *(Added after release: 0.6.0 shipped without this note.)* A consumer using
+  `createSignClient` needs to do nothing, because it implements all five. A
+  consumer with its OWN `SignClient` implementation (a test fake, a mock, a
+  custom transport) no longer type-checks: add the five methods. Stubs that
+  throw are enough if you never send data-mode envelopes.
+- **BREAKING (types): `Envelope.completion` is `Completion | DataCompletion |
+  null`**, because a data-mode envelope completes with a v2 data record (no
+  `as_sent_sha256` / `final_sha256`). *(Added after release: 0.6.0 shipped
+  without this note.)* Code that reads `envelope.completion.as_sent_sha256` or
+  `.final_sha256`, or passes `envelope.completion` to `CompletionCertificate`
+  (which still takes `Completion`), no longer type-checks. Narrow first, e.g.
+  `if (completion && completion.version === 1) { ... }`, or check
+  `"mode" in completion`. Nothing changes at runtime for a pdf envelope, which
+  still completes with the v1 record.
 
 ### Not in this release
 
