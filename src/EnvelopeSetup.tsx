@@ -39,7 +39,20 @@ export function initialEnvelopeSetupState(): EnvelopeSetupState {
   };
 }
 
-const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+/**
+ * `local@domain`, no whitespace, exactly one `@`, and a `.` in the domain with
+ * at least one character either side. The same strings as
+ * `^[^\s@]+@[^\s@]+\.[^\s@]+$`, which this replaces: that regex was quadratic on
+ * a domain of many dots with no valid ending (CodeQL js/polynomial-redos; 11 s
+ * on 100,000 characters). Linear: indexOf and one non-backtracking test.
+ */
+function isEmail(value: string): boolean {
+  if (/\s/.test(value)) return false;
+  const at = value.indexOf("@");
+  if (at < 1 || value.indexOf("@", at + 1) !== -1) return false;
+  const domain = value.slice(at + 1);
+  return domain.length >= 3 && domain.lastIndexOf(".", domain.length - 2) >= 1;
+}
 
 /** Why the envelope cannot be sent yet. Empty means it can. */
 export function setupProblems(state: EnvelopeSetupState): string[] {
@@ -48,7 +61,7 @@ export function setupProblems(state: EnvelopeSetupState): string[] {
   if (state.signers.length === 0) problems.push("Add at least one signer.");
   for (const signer of state.signers) {
     if (signer.name.trim().length === 0) problems.push("Every signer needs a name.");
-    if (!EMAIL.test(signer.email.trim())) problems.push(`"${signer.email}" is not an email address.`);
+    if (!isEmail(signer.email.trim())) problems.push(`"${signer.email}" is not an email address.`);
   }
   return Array.from(new Set(problems));
 }

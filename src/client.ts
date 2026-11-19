@@ -178,8 +178,19 @@ export interface SignClient {
 
 const SESSION_HEADER = "X-Fancy-Sign-Session";
 
+/**
+ * Strip trailing slashes by scanning from the end. Replaces `/\/+$/`, which is
+ * quadratic on a run of slashes that is not at the end (CodeQL
+ * js/polynomial-redos; 8 s on 100,000 slashes).
+ */
+function trimTrailingSlashes(value: string): string {
+  let end = value.length;
+  while (end > 0 && value.charCodeAt(end - 1) === 47 /* "/" */) end--;
+  return value.slice(0, end);
+}
+
 export function createSignClient(options: SignClientOptions): SignClient {
-  const base = options.baseUrl.replace(/\/+$/, "");
+  const base = trimTrailingSlashes(options.baseUrl);
   let session: string | null = options.session ?? null;
   const credentials = options.credentials ?? "same-origin";
 

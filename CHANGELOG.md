@@ -11,6 +11,20 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Security
+
+- **Two quadratic regexes replaced with linear scans** (CodeQL
+  js/polynomial-redos, alerts #1 and #2, HIGH). Both shipped in every released
+  version, 0.1.0 through 0.3.0:
+  - `createSignClient` trimmed `baseUrl` with `/\/+$/`: 8 s on 100,000 slashes
+    that are not at the end. It now scans back from the end.
+  - `setupProblems` (and so `EnvelopeSetup`) checked signer emails with
+    `^[^\s@]+@[^\s@]+\.[^\s@]+$`: 11 s on a 100,000-character domain of dots.
+    The email is typed by whoever fills in the form, or set by an agent. It is
+    now checked with indexOf, accepting and refusing exactly the same strings.
+- Consumers just upgrade; no API or behaviour changed. Regression tests time
+  the hostile inputs (under 50 ms) and pin what was accepted before.
+
 ### Changed
 
 - CI: re-pin org third-party allowlist to 2614224
