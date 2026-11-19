@@ -20,7 +20,12 @@ import { MARK_LIMITS, isMarkComplete } from "./mark";
 import { SignaturePad } from "./SignaturePad";
 import type { Mark, SignActivityEvent, SignStateError, SignerView } from "./types";
 
-export type CeremonyStep = "code" | "consent" | "review" | "signed" | "declined";
+/**
+ * `waiting`: the backend refused this signer with `not_your_turn` (fancy-sign
+ * `settings.order: "sequential"`, an earlier signer has not finished). Nothing
+ * to act on; the signer is emailed a link when it is their turn.
+ */
+export type CeremonyStep = "code" | "consent" | "review" | "signed" | "declined" | "waiting";
 
 /**
  * The panel whose action caused `error`. The error renders inside that panel,
@@ -146,6 +151,8 @@ export function signerMessage(error: SignStateError): string {
       return "Your signature could not be accepted. Clear it and try again.";
     case "step_up_required":
       return "This envelope needs a passkey confirmation before signing.";
+    case "not_your_turn":
+      return "It is not your turn to sign yet. We will email you when the signers before you have finished.";
     default:
       return error.message;
   }
@@ -254,6 +261,12 @@ export function SignerCeremony({
       patch: (current: SignerCeremonyState, code: string) => Partial<SignerCeremonyState> = () => ({}),
     ) => {
       const error = toStateError(err);
+      if (error.code === "not_your_turn") {
+        // Not a failure the signer can fix: the whole ceremony waits for an earlier signer.
+        update((current) => ({ ...current, step: "waiting", status: "idle", error: null, errorPanel: null }));
+        emit("waiting");
+        return;
+      }
       update((current) => ({ ...current, ...patch(current, error.code), status: "error", error, errorPanel: panel }));
       emit("error", undefined, { code: error.code });
     },
@@ -883,6 +896,14 @@ export function SignerCeremony({
             You have signed{view ? ` "${view.envelope.title}"` : ""}
             {view?.signer.signed_at ? ` on ${isoDateTime(view.signer.signed_at)}` : ""}. You will receive the
             completed document by email when every signer has finished.
+          </Callout>
+        </div>
+      ) : null}
+
+      {state.step === "waiting" ? (
+        <div data-fancy-sign-panel="waiting">
+          <Callout color="blue">
+            {signerMessage({ code: "not_your_turn", message: "" })}
           </Callout>
         </div>
       ) : null}

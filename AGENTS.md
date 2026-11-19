@@ -78,6 +78,14 @@ published. Find it then with `search-components`.
   to the first code box or the failing control. Only ceremony-level errors (the
   document failed to load, a restored state with no panel) use the top banner,
   a direct child of `[data-fancy-sign-surface]` without the panel attribute.
+- **Waiting for your turn** (fancy-sign 0.6, `settings.order: "sequential"`):
+  when the backend answers `not_your_turn` (an earlier signer has not finished),
+  the ceremony moves to `step: "waiting"` and shows
+  `[data-fancy-sign-panel="waiting"]` with nothing to act on, instead of an
+  error. `onActivity` gets `waiting`. The backend never mails a waiting signer
+  a link, so this shows only for a link that should not exist yet. Types:
+  `SignerStatus` gains `"waiting"`, `EnvelopeSettings.order` and
+  `OrgSettings.order` are optional `SigningOrder` (`parallel` | `sequential`).
   The same panel is in state as `errorPanel`. An error clears on the next
   attempt, or when its decline / request-changes group is closed. Read
   `data-fancy-sign-error`, never the position of the banner.

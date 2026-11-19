@@ -11,7 +11,11 @@
  */
 
 export type EnvelopeStatus = "draft" | "sent" | "completed" | "declined" | "voided" | "expired";
-export type SignerStatus = "pending" | "viewed" | "signed" | "declined";
+/** `waiting`: under `settings.order: "sequential"`, this signer's group has not been invited yet (fancy-sign 0.6). */
+export type SignerStatus = "pending" | "viewed" | "signed" | "declined" | "waiting";
+
+/** Who is invited when (fancy-sign 0.6). `parallel` is the default and what earlier backends do. */
+export type SigningOrder = "parallel" | "sequential";
 export type FieldKind = "signature" | "initials" | "date_signed";
 export type PerPageMark = "none" | "initials" | "signature";
 export type StepUp = "none" | "passkey";
@@ -37,6 +41,8 @@ export interface EnvelopeSettings {
   /** Phase 1 serves only `"none"`. Any other seal is refused by the backend today. */
   seal: "none";
   expires_at: string | null;
+  /** fancy-sign 0.6; absent from earlier backends, which are `parallel`. */
+  order?: SigningOrder;
 }
 
 export interface SignerConsent {
@@ -264,7 +270,9 @@ export type SignErrorCode =
   | "already_signed"
   | "already_declined"
   | "step_up_required"
-  | "limit_exceeded";
+  | "limit_exceeded"
+  /** fancy-sign 0.6, `settings.order: "sequential"`: this signer's group has not been invited yet (409). */
+  | "not_your_turn";
 
 /**
  * Failures the client names itself, because no backend answered with a code:
@@ -298,6 +306,8 @@ export interface FieldDraft {
 export interface OrgSettings {
   org_id: string;
   per_page: PerPageMark;
+  /** The organisation's default for `settings.order` (fancy-sign 0.6). */
+  order?: SigningOrder;
   updated_by: string | null;
   updated_at: string | null;
 }

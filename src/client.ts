@@ -50,6 +50,7 @@ const SIGN_ERROR_CODES: ReadonlySet<string> = new Set<SignErrorCode>([
   "already_declined",
   "step_up_required",
   "limit_exceeded",
+  "not_your_turn",
 ]);
 
 /** True when `code` is in the closed set the backends emit. */

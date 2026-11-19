@@ -11,6 +11,21 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Added
+
+- **A "waiting for your turn" state in `SignerCeremony`** for fancy-sign 0.6's
+  `settings.order: "sequential"` (CC-fancy-0051). When the backend refuses a
+  signer with `not_your_turn` (409), the ceremony moves to `step: "waiting"`
+  and shows `[data-fancy-sign-panel="waiting"]` with no action, instead of a
+  generic error; `onActivity` emits `waiting`. **Default unchanged; consumers
+  do nothing unless they opt in.** A backend without signing order never sends
+  the code, so nothing changes against fancy-sign 0.5 or earlier.
+- `not_your_turn` is in the client's closed `SignErrorCode` set (it was
+  `unknown_error` before). Types: `SignerStatus` gains `"waiting"`;
+  `SigningOrder`; optional `order` on `EnvelopeSettings` and `OrgSettings`.
+  A host with an exhaustive `switch` over `SignerStatus` or `CeremonyStep`
+  adds a `"waiting"` case.
+
 ## [0.4.0] - 2026-11-18
 
 **What a consumer must do.** If your host reads the error banner at the top of

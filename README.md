@@ -106,6 +106,10 @@ reason, after which the envelope stays open and the signer can still sign or
 decline. The button is disabled, with a note, once the signer has asked
 `max_change_requests` times.
 
+With fancy-sign 0.6 an envelope may sign in order (`settings.order:
+"sequential"`). A signer who opens a link before their turn sees a "not your
+turn yet" panel (`[data-fancy-sign-panel="waiting"]`) and nothing to act on.
+
 Sign stays disabled until consent is recorded, every required field is
 complete, a signature exists, and a 6-digit signing code is entered.
 `signBlockers(state)` returns what is missing, so a host can say why.
