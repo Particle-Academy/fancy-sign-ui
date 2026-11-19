@@ -11,6 +11,8 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-11-19
+
 ### Added
 
 - **A "waiting for your turn" state in `SignerCeremony`** for fancy-sign 0.6's
