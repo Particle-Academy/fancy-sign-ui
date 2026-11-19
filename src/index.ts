@@ -42,7 +42,7 @@ export {
 export type { SignFieldProps, SignFieldPaletteProps, PaletteSigner } from "./fields";
 
 export { SignerCeremony, initialCeremonyState, signBlockers, signerMessage } from "./SignerCeremony";
-export type { SignerCeremonyProps, SignerCeremonyState, CeremonyStep, SignBlocker } from "./SignerCeremony";
+export type { SignerCeremonyProps, SignerCeremonyState, CeremonyStep, CeremonyErrorPanel, SignBlocker } from "./SignerCeremony";
 
 export { EnvelopeSetup, initialEnvelopeSetupState, setupProblems } from "./EnvelopeSetup";
 export type { EnvelopeSetupProps, EnvelopeSetupState } from "./EnvelopeSetup";

@@ -68,6 +68,19 @@ published. Find it then with `search-components`.
 - **Human+:** controlled `value` + `onChange` (the full next state,
   JSON-serialisable), `data-fancy-sign-*` handles on every interactive element,
   and an optional `onActivity` callback per mutation.
+- **Error handles in the ceremony:** every error renders as
+  `[data-fancy-sign-error="<code>"]` with `role="alert"`, where `<code>` is the
+  kit error code from the server's envelope (`otp_invalid`, `otp_locked`,
+  `limit_exceeded`, ...; `unknown_error` when it has none). An error caused by a
+  panel action renders INSIDE that panel, beside the control, and carries
+  `data-fancy-sign-error-panel`: `code` (view code), `consent`, `sign` (signing
+  code and Sign, by the code boxes), `request-changes` or `decline`. Focus moves
+  to the first code box or the failing control. Only ceremony-level errors (the
+  document failed to load, a restored state with no panel) use the top banner,
+  a direct child of `[data-fancy-sign-surface]` without the panel attribute.
+  The same panel is in state as `errorPanel`. An error clears on the next
+  attempt, or when its decline / request-changes group is closed. Read
+  `data-fancy-sign-error`, never the position of the banner.
 
 ### Signing fields in the document builder (`./template`)
 

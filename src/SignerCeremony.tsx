@@ -23,6 +23,14 @@ import type { Mark, SignActivityEvent, SignStateError, SignerView } from "./type
 export type CeremonyStep = "code" | "consent" | "review" | "signed" | "declined";
 
 /**
+ * The panel whose action caused `error`. The error renders inside that panel,
+ * beside the control, instead of in the top banner. Absent or null means a
+ * ceremony-level error (the document failed to load, a restored state), which
+ * keeps the banner.
+ */
+export type CeremonyErrorPanel = "code" | "consent" | "sign" | "request-changes" | "decline";
+
+/**
  * The whole ceremony as one serialisable object.
  *
  * The signer session is NOT in here: it is a bearer credential, and it lives in
@@ -51,6 +59,8 @@ export interface SignerCeremonyState {
   viewedPages: number[];
   status: "idle" | "busy" | "error";
   error: SignStateError | null;
+  /** Where `error` came from; see `CeremonyErrorPanel`. */
+  errorPanel?: CeremonyErrorPanel | null;
 }
 
 export function initialCeremonyState(): SignerCeremonyState {
@@ -72,6 +82,7 @@ export function initialCeremonyState(): SignerCeremonyState {
     viewedPages: [],
     status: "idle",
     error: null,
+    errorPanel: null,
   };
 }
 
@@ -139,6 +150,23 @@ export function signerMessage(error: SignStateError): string {
       return error.message;
   }
 }
+
+/** Closing a panel takes its error with it; the error would have nowhere to show. */
+function clearedIf(state: SignerCeremonyState, panel: CeremonyErrorPanel): Partial<SignerCeremonyState> {
+  return state.errorPanel === panel ? { error: null, errorPanel: null, status: "idle" } : {};
+}
+
+/**
+ * Where focus goes when a panel shows an error: the control the signer acts on
+ * next. The first selector that matches an enabled element wins.
+ */
+const ERROR_FOCUS: Record<CeremonyErrorPanel, string[]> = {
+  code: ['[data-fancy-sign-code="view"] input', '[data-fancy-sign-action="request-view-code"]'],
+  consent: ['[data-fancy-sign-action="accept-consent"]'],
+  sign: ['[data-fancy-sign-code="accept"] input', '[data-fancy-sign-action="request-accept-code"]'],
+  "request-changes": ["[data-fancy-sign-changes-text]", '[data-fancy-sign-action="confirm-request-changes"]'],
+  decline: ["[data-fancy-sign-decline-reason]", '[data-fancy-sign-action="confirm-decline"]'],
+};
 
 export interface SignerCeremonyProps {
   /** The signer's link token, from the URL. */
@@ -220,15 +248,19 @@ export function SignerCeremony({
   );
 
   const fail = useCallback(
-    (err: unknown, patch: (current: SignerCeremonyState, code: string) => Partial<SignerCeremonyState> = () => ({})) => {
+    (
+      err: unknown,
+      panel: CeremonyErrorPanel | null,
+      patch: (current: SignerCeremonyState, code: string) => Partial<SignerCeremonyState> = () => ({}),
+    ) => {
       const error = toStateError(err);
-      update((current) => ({ ...current, ...patch(current, error.code), status: "error", error }));
+      update((current) => ({ ...current, ...patch(current, error.code), status: "error", error, errorPanel: panel }));
       emit("error", undefined, { code: error.code });
     },
     [emit, update],
   );
 
-  const busy = () => update((current) => ({ ...current, status: "busy", error: null }));
+  const busy = () => update((current) => ({ ...current, status: "busy", error: null, errorPanel: null }));
 
   const stepFor = (view: SignerView): CeremonyStep => {
     if (view.signer.status === "signed") return "signed";
@@ -246,7 +278,7 @@ export function SignerCeremony({
       update((c) => ({ ...c, viewCodeSent: true, viewCode: "", status: "idle", error: null }));
       emit("view-code-requested");
     } catch (err) {
-      fail(err);
+      fail(err, "code");
     }
   };
 
@@ -260,7 +292,7 @@ export function SignerCeremony({
       update((c) => ({ ...c, view, viewCode: "", step: stepFor(view), status: "idle", error: null }));
       emit("view-code-verified", view.envelope.id);
     } catch (err) {
-      fail(err, (_c, errCode) =>
+      fail(err, "code", (_c, errCode) =>
         errCode === "otp_locked" ? { viewCode: "", viewCodeSent: false } : { viewCode: "" },
       );
     }
@@ -277,7 +309,7 @@ export function SignerCeremony({
       update((c) => ({ ...c, view: next, step: stepFor(next), status: "idle", error: null }));
       emit("consent-accepted", view.envelope.id, { version: view.consent.version });
     } catch (err) {
-      fail(err);
+      fail(err, "consent");
     }
   };
 
@@ -297,7 +329,7 @@ export function SignerCeremony({
       update((c) => ({ ...c, acceptCodeSent: true, acceptCode: "", status: "idle", error: null }));
       emit("accept-code-requested");
     } catch (err) {
-      fail(err);
+      fail(err, "sign");
     }
   };
 
@@ -317,29 +349,29 @@ export function SignerCeremony({
       update((c) => ({ ...c, view: next, step: "signed", acceptCode: "", status: "idle", error: null }));
       emit("signed", current.view.envelope.id, { fields: Object.keys(fields).length, mark: current.mark.kind });
     } catch (err) {
-      fail(err, (_c, code) =>
+      fail(err, "sign", (_c, code) =>
         code === "otp_locked" ? { acceptCode: "", acceptCodeSent: false } : code === "otp_invalid" ? { acceptCode: "" } : {},
       );
     }
   };
 
   const startDecline = () => {
-    update((c) => ({ ...c, declining: true, error: null }));
+    update((c) => ({ ...c, declining: true, error: null, errorPanel: null }));
     emit("decline-started");
   };
 
   const cancelDecline = () => {
-    update((c) => ({ ...c, declining: false, declineReason: "" }));
+    update((c) => ({ ...c, declining: false, declineReason: "", ...clearedIf(c, "decline") }));
     emit("decline-cancelled");
   };
 
   const startRequestChanges = () => {
-    update((c) => ({ ...c, requestingChanges: true, declining: false, error: null }));
+    update((c) => ({ ...c, requestingChanges: true, declining: false, error: null, errorPanel: null }));
     emit("request-changes-started");
   };
 
   const cancelRequestChanges = () => {
-    update((c) => ({ ...c, requestingChanges: false, changesText: "" }));
+    update((c) => ({ ...c, requestingChanges: false, changesText: "", ...clearedIf(c, "request-changes") }));
     emit("request-changes-cancelled");
   };
 
@@ -355,7 +387,7 @@ export function SignerCeremony({
       // Never the text: activity events carry no signer-written content.
       emit("changes-requested", current.view?.envelope.id, { count: next.changes_requested ?? null });
     } catch (err) {
-      fail(err);
+      fail(err, "request-changes");
     }
   };
 
@@ -369,7 +401,7 @@ export function SignerCeremony({
       update((c) => ({ ...c, view: next, step: "declined", declining: false, status: "idle", error: null }));
       emit("declined", current.view?.envelope.id);
     } catch (err) {
-      fail(err);
+      fail(err, "decline");
     }
   };
 
@@ -454,7 +486,8 @@ export function SignerCeremony({
         }
       })
       .catch((err) => {
-        if (!cancelled) fail(err);
+        // Ceremony-level: no panel caused it, so it keeps the top banner.
+        if (!cancelled) fail(err, null);
       });
     return () => {
       cancelled = true;
@@ -474,8 +507,61 @@ export function SignerCeremony({
     typeof view?.max_change_requests === "number" && (view.changes_requested ?? 0) >= view.max_change_requests;
   const pdfUrl = documentUrl ?? fetchedUrl;
 
+  // Is the panel that caused the error on screen? If not (a host restored a
+  // state, or the panel closed), the error falls back to the top banner rather
+  // than vanishing.
+  const panelShown = (panel: CeremonyErrorPanel | null | undefined): panel is CeremonyErrorPanel => {
+    switch (panel) {
+      case "code":
+        return state.step === "code";
+      case "consent":
+        return state.step === "consent" && Boolean(view);
+      case "sign":
+        return state.step === "review" && Boolean(view);
+      case "request-changes":
+        return state.step === "review" && Boolean(view) && Boolean(state.requestingChanges);
+      case "decline":
+        return state.step === "review" && Boolean(view) && state.declining;
+      default:
+        return false;
+    }
+  };
+  const errorPanel = state.error && panelShown(state.errorPanel) ? state.errorPanel : null;
+
+  const errorView = (panel: CeremonyErrorPanel | null) =>
+    state.error ? (
+      <div
+        role="alert"
+        data-fancy-sign-error={state.error.code}
+        data-fancy-sign-error-panel={panel ?? undefined}
+        className="fancy-sign__error"
+      >
+        <Callout color={state.error.code === "otp_invalid" ? "amber" : "red"}>{signerMessage(state.error)}</Callout>
+      </div>
+    ) : null;
+  const panelError = (panel: CeremonyErrorPanel) => (errorPanel === panel ? errorView(panel) : null);
+
+  // A new panel error moves focus to the control the signer acts on next, so a
+  // keyboard or screen-reader user lands where the fix is. Keyed on the error
+  // object: typing afterwards does not steal focus back.
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const focusedError = useRef<SignStateError | null>(null);
+  useEffect(() => {
+    const error = state.error;
+    if (!error || !errorPanel || focusedError.current === error) return;
+    focusedError.current = error;
+    for (const selector of ERROR_FOCUS[errorPanel]) {
+      const el = rootRef.current?.querySelector<HTMLElement>(selector);
+      if (el && !(el as HTMLInputElement).disabled) {
+        el.focus();
+        return;
+      }
+    }
+  }, [state.error, errorPanel]);
+
   return (
     <div
+      ref={rootRef}
       data-fancy-sign-surface={surfaceId}
       data-fancy-sign-step={state.step}
       data-fancy-sign-status={state.status}
@@ -492,11 +578,8 @@ export function SignerCeremony({
         </div>
       ) : null}
 
-      {state.error ? (
-        <div data-fancy-sign-error={state.error.code} className="fancy-sign__error">
-          <Callout color={state.error.code === "otp_invalid" ? "amber" : "red"}>{signerMessage(state.error)}</Callout>
-        </div>
-      ) : null}
+      {/* The top banner: ceremony-level errors only. Panel errors render in their panel. */}
+      {state.error && !errorPanel ? errorView(null) : null}
 
       {state.step === "code" ? (
         <Card variant="outlined" padding="md" data-fancy-sign-panel="code">
@@ -512,6 +595,7 @@ export function SignerCeremony({
           >
             {state.viewCodeSent ? "Send a new code" : "Email me a code"}
           </Button>
+          {!state.viewCodeSent ? panelError("code") : null}
           {state.viewCodeSent ? (
             <>
               <div data-fancy-sign-code="view">
@@ -522,6 +606,7 @@ export function SignerCeremony({
                   onChange={(code) => update((c) => ({ ...c, viewCode: code.replace(/\D/g, "").slice(0, 6) }))}
                 />
               </div>
+              {panelError("code")}
               <Button
                 type="button"
                 color="blue"
@@ -554,6 +639,7 @@ export function SignerCeremony({
               onCheckedChange={(checked) => update((c) => ({ ...c, consentChecked: checked }))}
             />
           </div>
+          {panelError("consent")}
           <Button
             type="button"
             color="blue"
@@ -648,6 +734,8 @@ export function SignerCeremony({
                 />
               </div>
             ) : null}
+            {/* Beside the code boxes and the Sign button, not above a 70vh viewer. */}
+            {panelError("sign")}
 
             {blockers.length > 0 && !blockers.includes("busy") ? (
               <ul className="fancy-sign-ceremony__blockers" data-fancy-sign-blockers={blockers.join(" ")}>
@@ -723,6 +811,7 @@ export function SignerCeremony({
                     update((c) => ({ ...c, changesText: event.target.value.slice(0, maxDeclineReason) }))
                   }
                 />
+                {panelError("request-changes")}
                 <div className="fancy-sign-ceremony__actions">
                   <Button
                     type="button"
@@ -760,6 +849,7 @@ export function SignerCeremony({
                     update((c) => ({ ...c, declineReason: event.target.value.slice(0, maxDeclineReason) }))
                   }
                 />
+                {panelError("decline")}
                 <div className="fancy-sign-ceremony__actions">
                   <Button
                     type="button"

@@ -11,6 +11,37 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+**What a consumer must do.** If your host reads the error banner at the top of
+`SignerCeremony` to detect a failed panel action (a wrong signing code, a refused
+decline or change request), read `[data-fancy-sign-error]` instead: those errors
+now render inside their panel. The handle and its value (the kit error code) are
+unchanged, so a host that already selects `[data-fancy-sign-error="..."]` does
+nothing. No prop changed. (CC-fancy-0046.)
+
+### Fixed
+
+- **A panel action's error now shows where the signer is looking.** A wrong
+  signing code on Sign used to render as a banner at the TOP of the ceremony,
+  above a 70vh document viewer, while the Sign button and the code boxes sit at
+  the bottom: the signer pressed Sign, the boxes cleared, and nothing visible
+  happened. Each error caused by a panel action now renders inside that panel,
+  beside the control: the view code (`code` panel), consent, the signing code
+  and Sign (`sign` panel, by the code boxes), request changes and decline. Every
+  error has `role="alert"` so it is announced, and focus moves to the first code
+  box, or to the failing control when there are no boxes (a locked code focuses
+  "Send a new signing code"). Ceremony-level errors, such as the document
+  failing to load, keep the top banner. Closing the decline or request-changes
+  group clears the error it was showing. Field completion has no server call and
+  so no failure path; a `fields_incomplete` refusal comes from Sign and shows in
+  the `sign` panel.
+
+### Added
+
+- `data-fancy-sign-error-panel` on a panel error, naming its panel, and the
+  matching optional `errorPanel` in `SignerCeremonyState` (exported type
+  `CeremonyErrorPanel`). Absent or `null` means a ceremony-level error. Additive:
+  a stored state without it renders its error in the banner, as before.
+
 ## [0.3.0] - 2026-11-18
 
 **What a consumer must do.** Nothing. `./template` is a new entry; the main entry is
