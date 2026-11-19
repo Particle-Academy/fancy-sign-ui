@@ -11,24 +11,6 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
-### Security
-
-- **Two quadratic regexes replaced with linear scans** (CodeQL
-  js/polynomial-redos, alerts #1 and #2, HIGH). Both shipped in every released
-  version, 0.1.0 through 0.3.0:
-  - `createSignClient` trimmed `baseUrl` with `/\/+$/`: 8 s on 100,000 slashes
-    that are not at the end. It now scans back from the end.
-  - `setupProblems` (and so `EnvelopeSetup`) checked signer emails with
-    `^[^\s@]+@[^\s@]+\.[^\s@]+$`: 11 s on a 100,000-character domain of dots.
-    The email is typed by whoever fills in the form, or set by an agent. It is
-    now checked with indexOf, accepting and refusing exactly the same strings.
-- Consumers just upgrade; no API or behaviour changed. Regression tests time
-  the hostile inputs (under 50 ms) and pin what was accepted before.
-
-### Changed
-
-- CI: re-pin org third-party allowlist to 2614224
-
 ## [0.4.0] - 2026-11-18
 
 **What a consumer must do.** If your host reads the error banner at the top of
@@ -36,7 +18,19 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 decline or change request), read `[data-fancy-sign-error]` instead: those errors
 now render inside their panel. The handle and its value (the kit error code) are
 unchanged, so a host that already selects `[data-fancy-sign-error="..."]` does
-nothing. No prop changed. (CC-fancy-0046.)
+nothing. No prop changed. (CC-fancy-0046.) This release also carries two
+security fixes (below) for every earlier version; upgrade.
+
+### Added
+
+- `data-fancy-sign-error-panel` on a panel error, naming its panel, and the
+  matching optional `errorPanel` in `SignerCeremonyState` (exported type
+  `CeremonyErrorPanel`). Absent or `null` means a ceremony-level error. Additive:
+  a stored state without it renders its error in the banner, as before.
+
+### Changed
+
+- CI: re-pin org third-party allowlist to 2614224
 
 ### Fixed
 
@@ -55,12 +49,19 @@ nothing. No prop changed. (CC-fancy-0046.)
   so no failure path; a `fields_incomplete` refusal comes from Sign and shows in
   the `sign` panel.
 
-### Added
+### Security
 
-- `data-fancy-sign-error-panel` on a panel error, naming its panel, and the
-  matching optional `errorPanel` in `SignerCeremonyState` (exported type
-  `CeremonyErrorPanel`). Absent or `null` means a ceremony-level error. Additive:
-  a stored state without it renders its error in the banner, as before.
+- **Two quadratic regexes replaced with linear scans** (CodeQL
+  js/polynomial-redos, alerts #1 and #2, HIGH). Both shipped in every released
+  version, 0.1.0 through 0.3.0:
+  - `createSignClient` trimmed `baseUrl` with `/\/+$/`: 8 s on 100,000 slashes
+    that are not at the end. It now scans back from the end.
+  - `setupProblems` (and so `EnvelopeSetup`) checked signer emails with
+    `^[^\s@]+@[^\s@]+\.[^\s@]+$`: 11 s on a 100,000-character domain of dots.
+    The email is typed by whoever fills in the form, or set by an agent. It is
+    now checked with indexOf, accepting and refusing exactly the same strings.
+- Consumers just upgrade; no API or behaviour changed. Regression tests time
+  the hostile inputs (under 50 ms) and pin what was accepted before.
 
 ## [0.3.0] - 2026-11-18
 
