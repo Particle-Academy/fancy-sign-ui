@@ -75,6 +75,14 @@
   grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
 }
 
+/* Data mode: a checklist entry is the field plus its Show button. */
+:where(.fancy-sign-ceremony__checklist-item) {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  align-items: flex-start;
+}
+
 :where(.fancy-sign-palette__kinds) {
   display: flex;
   flex-wrap: wrap;

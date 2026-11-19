@@ -45,6 +45,16 @@
         "default": "./dist/client.cjs"
       }
     },
+    "./data": {
+      "import": {
+        "types": "./dist/data.d.ts",
+        "default": "./dist/data.js"
+      },
+      "require": {
+        "types": "./dist/data.d.cts",
+        "default": "./dist/data.cjs"
+      }
+    },
     "./template": {
       "import": {
         "types": "./dist/template.d.ts",

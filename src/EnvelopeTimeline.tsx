@@ -33,6 +33,9 @@ const EVENT_TITLE: Record<string, string> = {
   "envelope.expired": "Envelope expired",
   "document.downloaded": "Document downloaded",
   "seal.applied": "Seal applied",
+  "document.rendered": "Document rendered",
+  "signature.sealed": "Signature sealed",
+  "document.finalized": "Final document registered",
 };
 
 const EVENT_COLOR: Record<string, "green" | "red" | "amber" | "blue" | "zinc"> = {

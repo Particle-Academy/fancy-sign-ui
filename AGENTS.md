@@ -52,6 +52,21 @@ published. Find it then with `search-components`.
   `value` / `onChange` (`initialCeremonyState()`). `signBlockers(state)` says
   why Sign is still disabled. `renderPage={(n) => ...}` renders pages yourself
   and enables per-page `page.viewed` beacons.
+- **Data mode (fancy-sign 0.7, `settings.mode: "data"`):** pass
+  `renderData={(data, ctx) => ...}` and `renderer="<template> @ <app release>"`.
+  The ceremony fetches the data (`client.signerData`), proves its
+  `fsig-data-1` hash equals the envelope's `data_sha256`, and only then calls
+  `renderData` with the parsed object. `ctx`: `fields`, `renderField(id)` (the
+  ceremony's control, wrapped in `[data-fancy-sign-field-slot]`),
+  `onLocate(handler)` (the checklist's `[data-fancy-sign-field-show]` button
+  fires it), `now` (`sent_at`) and `reportLayout({ pages })` (posts
+  `document.rendered` once per layout change; mark your pages
+  `data-fancy-sign-page="n"` for `page.viewed`). State gains `dataCheck`
+  (`pending` / `verified` / `refused`) and `reportedPages`; `signBlockers`
+  gains `data`. Handles: `[data-fancy-sign-document="data"|"refused"|"no-renderer"|"loading"]`.
+  Activity: `data-verified`, `rendered`, `locate`. `./data` (no React):
+  `canonicalData`, `dataSha256`, `parseCanonicalData`. Sender client:
+  `inviteSigner`, `getSignatures`, `attachFinal`.
 - **Organisation:** `<OrgSigningSettings value onChange canEdit onSave />` is
   the admin's per-page switch (`client.updateOrgSettings({ per_page })`; the
   backend answers `forbidden` to a non-admin). Pass the saved value to
@@ -127,6 +142,12 @@ import { signBlockKinds } from "@particle-academy/fancy-sign-ui/template";
   `[0, 1]`, y down, at most 64 strokes / 2048 points) or
   `{ kind: "typed", text }` (at most 128 characters).
 - **`level` is fixed at `SES` and `seal` at `none`** in this phase.
+- **Data mode renders nothing it has not checked.** A hash mismatch shows
+  `data_hash_mismatch` and no data; a data envelope without `renderData`
+  shows an error and never raw JSON, and does not fetch (the signer could not
+  be shown it). Call `ctx.reportLayout` from an effect, not during render.
+  `renderer` is a claim the host makes about itself; without it no
+  `document.rendered` is posted and signing still works.
 - **`page.viewed` is reported by the signer's browser** and labelled so; without
   `renderPage`, no per-page claim is made.
 - **Legal wording:** say only that it is designed to support simple electronic

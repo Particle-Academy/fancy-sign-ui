@@ -20,6 +20,9 @@ import type {
   OtpSent,
   PerPageMark,
   PublicKey,
+  RenderedClaim,
+  SignatureEntry,
+  FinalRecord,
   SignClientErrorCode,
   SignErrorCode,
   SignEvent,
@@ -51,7 +54,19 @@ const SIGN_ERROR_CODES: ReadonlySet<string> = new Set<SignErrorCode>([
   "step_up_required",
   "limit_exceeded",
   "not_your_turn",
+  "data_hash_mismatch",
+  "data_external_reference",
+  "envelope_not_completed",
+  "final_already_attached",
 ]);
+
+/** Data mode: the signer's data exactly as served, and the hash the server put beside it. */
+export interface SignerData {
+  /** The canonical fsig-data-1 bytes, as text. Parse and check them with `parseCanonicalData` (`./data`). */
+  text: string;
+  /** The `X-Fancy-Sign-Data-Sha256` header, or null when the server sent none. */
+  sha256: string | null;
+}
 
 /** True when `code` is in the closed set the backends emit. */
 export function isSignErrorCode(code: unknown): code is SignErrorCode {
@@ -159,6 +174,12 @@ export interface SignClient {
   getOrgSettings(): Promise<OrgSettings>;
   /** Change them. Only an org admin may (`forbidden` otherwise). */
   updateOrgSettings(input: { per_page: PerPageMark }): Promise<OrgSettings>;
+  /** Data mode: invite one signer, when the host's workflow decides (fancy-sign 0.7). */
+  inviteSigner(id: string, signerId: string): Promise<Envelope>;
+  /** Data mode: every signature record so far, each with its adopted mark. */
+  getSignatures(id: string): Promise<SignatureEntry[]>;
+  /** Data mode, after completion: register the final PDF's hash once. The PDF itself is never sent. */
+  attachFinal(id: string, input: { sha256: string; bytes: number }): Promise<FinalRecord>;
 
   // Signer (link token, then a session after the view code)
   requestCode(token: string, purpose: OtpPurpose): Promise<OtpSent>;
@@ -166,7 +187,11 @@ export interface SignClient {
   getSignerView(token: string): Promise<SignerView>;
   consent(token: string, version: string): Promise<SignerView>;
   signerDocument(token: string): Promise<Blob>;
+  /** Data mode: the same route as `signerDocument`, read as text (its first fetch is `document.opened`). */
+  signerData(token: string): Promise<SignerData>;
   reportPageView(token: string, page: number, ms: number): Promise<void>;
+  /** Data mode: the browser's `document.rendered` claim. */
+  reportRendered(token: string, claim: RenderedClaim): Promise<void>;
   sign(token: string, input: SignInput): Promise<SignerView>;
   decline(token: string, reason: string): Promise<SignerView>;
   /** Ask the sender for changes. The envelope stays open (fancy-sign 0.3.0 and later). */
@@ -271,6 +296,9 @@ export function createSignClient(options: SignClientOptions): SignClient {
     documentUrl: (id) => `${base}/envelopes/${enc(id)}/document`,
     getOrgSettings: () => json("GET", "/org/settings"),
     updateOrgSettings: (input) => json("PUT", "/org/settings", { json: input }),
+    inviteSigner: (id, signerId) => json("POST", `/envelopes/${enc(id)}/signers/${enc(signerId)}/invite`, { json: {} }),
+    getSignatures: (id) => json("GET", `/envelopes/${enc(id)}/signatures`),
+    attachFinal: (id, input) => json("POST", `/envelopes/${enc(id)}/final`, { json: { sha256: input.sha256, bytes: input.bytes } }),
 
     requestCode: (token, purpose) =>
       json("POST", signerPath(token, "/otp"), { json: { purpose }, signer: true }),
@@ -285,6 +313,18 @@ export function createSignClient(options: SignClientOptions): SignClient {
     consent: (token, version) =>
       json("POST", signerPath(token, "/consent"), { json: { version }, signer: true }),
     signerDocument: (token) => blob(signerPath(token, "/document"), true),
+    signerData: async (token) => {
+      // Text, never response.json(): the bytes are what is hashed, and a
+      // parse-and-reserialise here would hand the ceremony something else.
+      const response = await raw("GET", signerPath(token, "/document"), { signer: true });
+      return { text: await response.text(), sha256: response.headers.get("X-Fancy-Sign-Data-Sha256") };
+    },
+    reportRendered: async (token, claim) => {
+      await raw("POST", signerPath(token, "/events"), {
+        json: { type: "document.rendered", data_sha256: claim.data_sha256, renderer: claim.renderer, pages: claim.pages },
+        signer: true,
+      });
+    },
     reportPageView: async (token, page, ms) => {
       await raw("POST", signerPath(token, "/events"), {
         json: { type: "page.viewed", page, ms },

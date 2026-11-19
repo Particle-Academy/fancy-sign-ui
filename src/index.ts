@@ -10,7 +10,8 @@
  */
 
 export { SignError, createSignClient, isSignErrorCode, toStateError } from "./client";
-export type { SignClient, SignClientOptions, VerifyInput, CertificateJson } from "./client";
+export type { SignClient, SignClientOptions, VerifyInput, CertificateJson, SignerData } from "./client";
+export { DATA_CANONICAL_NAME, DataCanonicalError, canonicalData, dataSha256, parseCanonicalData, sha256Hex } from "./data";
 export type * from "./types";
 
 export {
@@ -42,7 +43,15 @@ export {
 export type { SignFieldProps, SignFieldPaletteProps, PaletteSigner } from "./fields";
 
 export { SignerCeremony, initialCeremonyState, signBlockers, signerMessage } from "./SignerCeremony";
-export type { SignerCeremonyProps, SignerCeremonyState, CeremonyStep, CeremonyErrorPanel, SignBlocker } from "./SignerCeremony";
+export type {
+  SignerCeremonyProps,
+  SignerCeremonyState,
+  CeremonyStep,
+  CeremonyErrorPanel,
+  SignBlocker,
+  DataField,
+  DataRenderContext,
+} from "./SignerCeremony";
 
 export { EnvelopeSetup, initialEnvelopeSetupState, setupProblems } from "./EnvelopeSetup";
 export type { EnvelopeSetupProps, EnvelopeSetupState } from "./EnvelopeSetup";

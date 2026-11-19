@@ -60,6 +60,14 @@ describe("packaging", () => {
     expect(graph).not.toMatch(/@particle-academy\/react-fancy/);
   });
 
+  it("keeps ./data (fsig-data-1) free of React, so any host can hash its data", () => {
+    const graph = readEntryGraph("data.js");
+    expect(graph).toContain("fsig-data-1");
+    expect(graph).not.toMatch(/from\s*["']react["']/);
+    expect(graph).not.toMatch(/@particle-academy\/react-fancy/);
+    expect(readFileSync(join(root, "package.json"), "utf8")).toContain('"./data"');
+  });
+
   it("never draws an image: no toDataURL or toBlob anywhere in the bundle", () => {
     const graph = readEntryGraph("index.js");
     expect(graph).not.toMatch(/toDataURL|toBlob\(/);

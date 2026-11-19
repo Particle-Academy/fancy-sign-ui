@@ -11,6 +11,67 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+**Nothing changes unless an envelope is in data mode** (fancy-sign 0.7,
+`settings.mode: "data"`); every new wire field is optional, so this release
+keeps reading older backends. One type widened (see Changed).
+
+### Added
+
+- **The data-mode signer ceremony** (CC-fancy-0052). For a `mode: "data"`
+  envelope, `SignerCeremony` signs the host's own data instead of showing a PDF:
+  - It fetches the data through the signer's session (`client.signerData`, the
+    server-observed `document.opened`), canonicalises it (`fsig-data-1`) and
+    checks its SHA-256 against the envelope's `data_sha256` and the server's
+    `X-Fancy-Sign-Data-Sha256` header. Only then is the parsed object handed to
+    the host. On a mismatch nothing is rendered, the banner shows
+    `data_hash_mismatch` and Sign stays blocked.
+  - New props `renderData(data, ctx)` and `renderer`. `ctx` has `fields`,
+    `renderField(id)` (the ceremony's own control, which the signer presses),
+    `onLocate(handler)`, `now` (the envelope's `sent_at`) and
+    `reportLayout({ pages })`, which posts a `document.rendered` claim with the
+    `renderer` string once per layout change (at most `maxRenderReports`,
+    default 20). Page elements the host marks `data-fancy-sign-page` are
+    observed for `page.viewed` once a layout is reported. A render that never
+    reports still signs.
+  - The fields checklist stays as a complete fallback, with a **Show** button
+    per field (`data-fancy-sign-field-show`) that fires the `onLocate`
+    subscribers. A host-placed control and the checklist share one state.
+  - A data envelope without `renderData` shows an error and never raw JSON, and
+    does not fetch the data.
+  - `sign` sends `data_sha256`. The code, consent and sign steps are unchanged.
+  - State gains `dataCheck` and `reportedPages`; `signBlockers` gains `data`;
+    handles `data-fancy-sign-document="data" | "refused" | "no-renderer"`,
+    `data-fancy-sign-field-slot`; activity `data-verified`, `rendered`,
+    `locate`. Nothing about presentation is read from or stored on the
+    envelope, so a new template or a new release of this package reaches
+    envelopes already sent.
+- **`./data`** (React-free, also on the main entry): `canonicalData`,
+  `dataSha256`, `parseCanonicalData`, `sha256Hex`, `DataCanonicalError`. Held
+  to fancy-conformance `sign/data`.
+- **Client:** `signerData`, `reportRendered`; sender `inviteSigner`,
+  `getSignatures`, `attachFinal`. The closed error set gains
+  `data_hash_mismatch`, `data_external_reference`, `envelope_not_completed`
+  and `final_already_attached`.
+- **Types:** `EnvelopeMode`, `SignatureRecord`, `DataCompletion`,
+  `FinalRecord`, `SignatureEntry`, `RenderedClaim`, `DataField`,
+  `DataRenderContext`; optional `settings.mode`, `document.{mode, profile,
+  canonical, data_sha256, data_bytes, fields_sha256}`, `envelope.final`,
+  `signers[].{invited_at, signature}`, `SignerView.envelope.{mode,
+  data_sha256, sent_at}`, `SignInput.data_sha256`; `FieldAnchor` gains
+  `{ pointer }`; the timeline names `document.rendered`, `signature.sealed`
+  and `document.finalized`.
+
+### Changed
+
+- **Types: `Field.anchor` is `FieldAnchor | null`** (a data-mode field may have
+  no anchor) and `SignerView.envelope.pages` is optional (a data-mode view has
+  none). A host that reads `field.anchor` with an `in` check adds a null check;
+  nothing changes at runtime for a pdf envelope.
+
+### Not in this release
+
+- Data-mode views in `SignatureVerifier` and `CompletionCertificate`.
+
 ## [0.5.0] - 2026-11-19
 
 ### Added

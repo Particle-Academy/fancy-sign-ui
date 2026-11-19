@@ -46,7 +46,17 @@ person did. So:
   by the backend's layout; nothing here stores coordinates.
 - `src/SignerCeremony.tsx` - the signer flow and `signBlockers`. `page.viewed`
   beacons are only sent in `renderPage` mode, where real pages exist to
-  observe; the whole-PDF mode makes no per-page claim.
+  observe; the whole-PDF mode makes no per-page claim. Data mode
+  (`view.envelope.mode === "data"`): the parsed data lives in component state,
+  NOT in the controlled state (only `dataCheck` and `reportedPages` do), and is
+  set only after `parseCanonicalData` proved it against `data_sha256`. Nothing
+  presentational is read from the envelope: the ceremony is live.
+- `src/data.ts` - `fsig-data-1` (`./data`, no React). Held to fancy-conformance
+  `sign/data` by `tests/data.test.ts`, whose fixture
+  `tests/fixtures/sign-data-cases.json` is that suite's `cases.json`, copied
+  byte for byte; refresh it from fancy-conformance, never edit it. A lone
+  surrogate is found by a linear scan, never a regular expression (see
+  `redos.test.ts`).
 - `src/EnvelopeSetup.tsx` - sender editor. Send and Void are staged
   (`pendingMode`, default true); Void always needs a reason. `level` and `seal`
   are displayed fixed (`SES`, `none`); do not add selectors for values the

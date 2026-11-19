@@ -132,6 +132,37 @@ through the signer's session once: that is the server-observed
 `document.opened`, and signing is refused until it has happened. These beacons are claims from the signer's browser, and every surface here
 labels them as such.
 
+**Data mode** (fancy-sign 0.7, `settings.mode: "data"`). The envelope signs
+the host's own data, an opaque JSON object, and the host renders it with its
+current template:
+
+```tsx
+<SignerCeremony
+  token={token}
+  client={client}
+  renderer="quote-v7 @ shop 2026.11.19"
+  renderData={(quote, ctx) => (
+    <QuotePage quote={quote} signature={ctx.renderField("buyer-sig")} onLayout={ctx.reportLayout} />
+  )}
+/>
+```
+
+The ceremony fetches the data through the signer's session (the
+server-observed `document.opened`), canonicalises it (`fsig-data-1`) and checks
+its hash against the envelope's `data_sha256`. Only then does it call
+`renderData` with the parsed object; on a mismatch it renders nothing and Sign
+stays blocked. `ctx` gives the template `fields`, `renderField(id)` (the
+ceremony's own control, which the signer presses), `onLocate(handler)` (fired
+by the checklist's **Show** button), `now` (the envelope's `sent_at`) and
+`reportLayout({ pages })`, which posts a `document.rendered` claim carrying
+`renderer` once per layout change. The fields checklist stays as a complete
+fallback. Nothing about the presentation is stored on the envelope, so a new
+template or a new release of this package reaches envelopes already sent. The
+package seals the data and the signing evidence; how the data was displayed to
+each signer is the host application's. The `./data` entry (no React) exports
+`canonicalData` and `dataSha256` for hosts that compute `data_sha256` in
+JavaScript.
+
 ### The sender
 
 ```tsx

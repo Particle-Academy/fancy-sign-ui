@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import {
   Badge,
@@ -15,10 +15,47 @@ import {
 } from "@particle-academy/react-fancy";
 import { activityEvent, isoDateTime, useSurfaceState } from "./activity";
 import { toStateError, type SignClient } from "./client";
+import { DataCanonicalError, parseCanonicalData } from "./data";
 import { SignFieldView } from "./fields";
 import { MARK_LIMITS, isMarkComplete } from "./mark";
 import { SignaturePad } from "./SignaturePad";
-import type { Mark, SignActivityEvent, SignStateError, SignerView } from "./types";
+import type { Field, Mark, SignActivityEvent, SignStateError, SignerView } from "./types";
+
+/** Data mode: one of the signer's fields, as the host's template sees it. */
+export interface DataField {
+  id: string;
+  kind: Field["kind"];
+  required: boolean;
+  label: string | null;
+  /** `{ pointer }` into the data (a hint for the template), or null. */
+  anchor: Field["anchor"];
+  completed: boolean;
+}
+
+/**
+ * Data mode: what the ceremony hands the host's `renderData`, so the host can
+ * place the ceremony's controls inside its own layout. Nothing here places
+ * anything for it, and nothing here completes a field: `renderField` returns a
+ * control the SIGNER presses.
+ */
+export interface DataRenderContext {
+  /** This signer's fields and their state. */
+  fields: DataField[];
+  /** The ceremony's own control for a field, bound to ceremony state. Put it wherever the template wants. Null for an unknown id. */
+  renderField: (id: string) => ReactNode;
+  /** "Show me this field": fired when the signer presses Show in the fields checklist. Returns an unsubscribe. */
+  onLocate: (handler: (field: DataField) => void) => () => void;
+  /** The envelope's `sent_at`, for a stable "as of" date in the rendering. */
+  now: string | null;
+  /**
+   * Tell the ceremony how many pages the template laid out (1 for one
+   * continuous page). Posts the `document.rendered` claim with the `renderer`
+   * prop once per change of layout; page elements marked
+   * `data-fancy-sign-page="n"` are then observed for `page.viewed`. Call it
+   * from an effect, not during render.
+   */
+  reportLayout: (layout: { pages: number }) => void;
+}
 
 /**
  * `waiting`: the backend refused this signer with `not_your_turn` (fancy-sign
@@ -66,6 +103,15 @@ export interface SignerCeremonyState {
   error: SignStateError | null;
   /** Where `error` came from; see `CeremonyErrorPanel`. */
   errorPanel?: CeremonyErrorPanel | null;
+  /**
+   * Data mode: has the data received been proved to be the signed data? Set
+   * to `verified` only after its fsig-data-1 hash matched `data_sha256`;
+   * `refused` when it did not (nothing is rendered). Sign is blocked until
+   * `verified`.
+   */
+  dataCheck?: "pending" | "verified" | "refused" | null;
+  /** Data mode: the pages the host's template last reported (a claim posted as `document.rendered`). */
+  reportedPages?: number | null;
 }
 
 export function initialCeremonyState(): SignerCeremonyState {
@@ -88,10 +134,17 @@ export function initialCeremonyState(): SignerCeremonyState {
     status: "idle",
     error: null,
     errorPanel: null,
+    dataCheck: null,
+    reportedPages: null,
   };
 }
 
-export type SignBlocker = "not_loaded" | "envelope_not_open" | "consent" | "fields" | "mark" | "accept_code" | "busy";
+/** `data`: a data-mode envelope whose data has not been proved to be the signed data. */
+export type SignBlocker = "not_loaded" | "envelope_not_open" | "consent" | "data" | "fields" | "mark" | "accept_code" | "busy";
+
+function isDataView(view: SignerView | null | undefined): boolean {
+  return view?.envelope.mode === "data";
+}
 
 const SIX_DIGITS = /^\d{6}$/;
 
@@ -106,6 +159,7 @@ export function signBlockers(state: SignerCeremonyState): SignBlocker[] {
   const blockers: SignBlocker[] = [];
   if (view.envelope.status !== "sent") blockers.push("envelope_not_open");
   if (view.consent.required && !view.signer.consent_at) blockers.push("consent");
+  if (isDataView(view) && state.dataCheck !== "verified") blockers.push("data");
   const done = new Set(state.completedFields);
   if (view.fields.some((f) => f.required && !done.has(f.id))) blockers.push("fields");
   if (!isMarkComplete(state.mark)) blockers.push("mark");
@@ -118,6 +172,7 @@ const BLOCKER_TEXT: Record<SignBlocker, string> = {
   not_loaded: "The envelope has not loaded.",
   envelope_not_open: "This envelope is no longer open for signing.",
   consent: "Agree to sign electronically first.",
+  data: "The document has not been checked yet.",
   fields: "Complete every required field.",
   mark: "Draw or type your signature.",
   accept_code: "Enter the 6-digit signing code we emailed you.",
@@ -153,9 +208,26 @@ export function signerMessage(error: SignStateError): string {
       return "This envelope needs a passkey confirmation before signing.";
     case "not_your_turn":
       return "It is not your turn to sign yet. We will email you when the signers before you have finished.";
+    case "data_hash_mismatch":
+      return "The document received does not match the one you were asked to sign, so it is not shown. Do not sign; contact the sender.";
+    case "data_invalid":
+      return "The document received could not be checked, so it is not shown. Contact the sender.";
     default:
       return error.message;
   }
+}
+
+/** The `renderer` label as the server takes it: controls stripped, trimmed, at most 200 characters; null when empty. */
+function cleanRenderer(value: string | undefined): string | null {
+  if (typeof value !== "string") return null;
+  let out = "";
+  for (const ch of value) {
+    const c = ch.codePointAt(0)!;
+    if (c < 0x20 || (c >= 0x7f && c < 0xa0)) continue;
+    out += ch;
+  }
+  out = Array.from(out.trim()).slice(0, 200).join("").trim();
+  return out.length > 0 ? out : null;
 }
 
 /** Closing a panel takes its error with it; the error would have nowhere to show. */
@@ -206,6 +278,23 @@ export interface SignerCeremonyProps {
    * exactly the bytes the server recorded as opened.
    */
   onDocument?: (pdf: Blob) => void;
+  /**
+   * Data mode (fancy-sign 0.7): render the signed data with the host's CURRENT
+   * template. `data` is the object parsed from the canonical bytes the
+   * ceremony fetched and proved against `data_sha256`; `ctx` places the
+   * ceremony's field controls. Read at every render, never stored: a new
+   * template reaches every open envelope with no resend. Without it a data
+   * envelope shows an error, never raw JSON.
+   */
+  renderData?: (data: Record<string, unknown>, ctx: DataRenderContext) => ReactNode;
+  /**
+   * Data mode: the template AND app release `renderData` draws with, e.g.
+   * `"quote-v7 @ shop 2026.11.19"` (1 to 200 characters). Posted in the
+   * `document.rendered` claim; without it no claim is made.
+   */
+  renderer?: string;
+  /** Data mode: most `document.rendered` claims this ceremony posts. Default 20. */
+  maxRenderReports?: number;
   /** Minimum time on screen before a page counts as viewed. Default 1500 ms. */
   minDwellMs?: number;
   /** Minimum time between two reports for the same page. Default 30000 ms. */
@@ -237,6 +326,9 @@ export function SignerCeremony({
   renderPage,
   documentUrl,
   onDocument,
+  renderData,
+  renderer,
+  maxRenderReports = 20,
   minDwellMs = 1500,
   pageViewIntervalMs = 30000,
   maxPageViewReports = 200,
@@ -260,7 +352,7 @@ export function SignerCeremony({
       panel: CeremonyErrorPanel | null,
       patch: (current: SignerCeremonyState, code: string) => Partial<SignerCeremonyState> = () => ({}),
     ) => {
-      const error = toStateError(err);
+      const error = err instanceof DataCanonicalError ? { code: err.code, message: err.message } : toStateError(err);
       if (error.code === "not_your_turn") {
         // Not a failure the signer can fix: the whole ceremony waits for an earlier signer.
         update((current) => ({ ...current, step: "waiting", status: "idle", error: null, errorPanel: null }));
@@ -353,11 +445,14 @@ export function SignerCeremony({
     for (const id of current.completedFields) fields[id] = true;
     busy();
     try {
+      const dataSha = isDataView(current.view) ? current.view.envelope.data_sha256 : undefined;
       const next = await client.sign(token, {
         fields,
         mark: current.mark,
         adoption: current.view.adoption_text,
         code: current.acceptCode,
+        // Data mode: the hash of what the signer is signing; the server refuses a mismatch before the code is spent.
+        ...(dataSha !== undefined ? { data_sha256: dataSha } : {}),
       });
       update((c) => ({ ...c, view: next, step: "signed", acceptCode: "", status: "idle", error: null }));
       emit("signed", current.view.envelope.id, { fields: Object.keys(fields).length, mark: current.mark.kind });
@@ -423,8 +518,12 @@ export function SignerCeremony({
   const reportRef = useRef({ client, token, minDwellMs, pageViewIntervalMs, maxPageViewReports, emit, update });
   reportRef.current = { client, token, minDwellMs, pageViewIntervalMs, maxPageViewReports, emit, update };
   const pagesRef = useRef<HTMLDivElement | null>(null);
-  const pageCount = state.view?.envelope.pages ?? 0;
-  const observing = state.step === "review" && Boolean(renderPage) && pageCount > 0;
+  const dataMode = isDataView(state.view);
+  // Data mode: pages exist only as the host's template reported them, and only
+  // elements it marked data-fancy-sign-page are observed. No layout, no claim.
+  const pageCount = dataMode ? (state.reportedPages ?? 0) : (state.view?.envelope.pages ?? 0);
+  const observing =
+    state.step === "review" && pageCount > 0 && (dataMode ? state.dataCheck === "verified" && Boolean(renderData) : Boolean(renderPage));
 
   useEffect(() => {
     if (!observing || typeof IntersectionObserver === "undefined" || !pagesRef.current) return;
@@ -484,8 +583,78 @@ export function SignerCeremony({
   const showsPdf = !renderPage && !documentUrl;
   const onDocumentRef = useRef(onDocument);
   onDocumentRef.current = onDocument;
+
+  // --- data mode: the signed data, fetched through the session and proved ----
+  //
+  // The fetch is the server-observed `document.opened`. The bytes are parsed
+  // here and canonicalised again; only when their fsig-data-1 hash equals the
+  // envelope's `data_sha256` (and the header the server sent beside them) is
+  // the parsed object handed to the host. So the host's template renders the
+  // data that is signed, and cannot be handed anything else through this
+  // ceremony. Without `renderData` nothing is fetched: there is no way to show
+  // the signer the data, so it must not count as opened.
+  const [signedData, setSignedData] = useState<Record<string, unknown> | null>(null);
+  const expectedSha = dataMode ? (state.view?.envelope.data_sha256 ?? null) : null;
+  const canRenderData = Boolean(renderData);
   useEffect(() => {
-    if (!opening) return;
+    if (!opening || !dataMode || !canRenderData) return;
+    let cancelled = false;
+    setSignedData(null);
+    update((c) => ({ ...c, dataCheck: "pending" }));
+    (async () => {
+      const served = await client.signerData(token);
+      const expected = expectedSha ?? "";
+      if (expected.length === 0 || (served.sha256 !== null && served.sha256.toLowerCase() !== expected.toLowerCase())) {
+        throw new DataCanonicalError("data_hash_mismatch", "The data received does not match the data that is signed.");
+      }
+      return parseCanonicalData(served.text, expected);
+    })()
+      .then((parsed) => {
+        if (cancelled) return;
+        setSignedData(parsed.data);
+        update((c) => ({ ...c, dataCheck: "verified" }));
+        emit("data-verified", state.view?.envelope.id, { data_sha256: parsed.sha256 });
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        if (err instanceof DataCanonicalError) update((c) => ({ ...c, dataCheck: "refused" }));
+        // Ceremony-level: no panel caused it, so it keeps the top banner.
+        fail(err, null);
+      });
+    return () => {
+      cancelled = true;
+    };
+    // Once per opening of this envelope's data; `fail`, `emit` and `update` are read then.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [opening, dataMode, canRenderData, client, token, expectedSha]);
+
+  // Locate subscribers and the rendering claim, stable across renders.
+  const locateRef = useRef(new Set<(field: DataField) => void>());
+  const onLocate = useCallback((handler: (field: DataField) => void) => {
+    locateRef.current.add(handler);
+    return () => {
+      locateRef.current.delete(handler);
+    };
+  }, []);
+  const claimRef = useRef({ client, token, renderer, expectedSha, maxRenderReports, emit, update });
+  claimRef.current = { client, token, renderer, expectedSha, maxRenderReports, emit, update };
+  const claimed = useRef<{ pages: number | null; reports: number }>({ pages: null, reports: 0 });
+  const reportLayout = useCallback((layout: { pages: number }) => {
+    const pages = layout?.pages;
+    if (typeof pages !== "number" || !Number.isInteger(pages) || pages < 1) return;
+    const cfg = claimRef.current;
+    cfg.update((c) => (c.reportedPages === pages ? c : { ...c, reportedPages: pages }));
+    const label = cleanRenderer(cfg.renderer);
+    if (label === null || !cfg.expectedSha) return;
+    if (claimed.current.pages === pages || claimed.current.reports >= cfg.maxRenderReports) return;
+    claimed.current = { pages, reports: claimed.current.reports + 1 };
+    cfg.emit("rendered", undefined, { pages, renderer: label });
+    // A claim is best-effort: a failed report must never interrupt the signer.
+    cfg.client.reportRendered(cfg.token, { data_sha256: cfg.expectedSha, renderer: label, pages }).catch(() => undefined);
+  }, []);
+
+  useEffect(() => {
+    if (!opening || dataMode) return;
     let cancelled = false;
     let url: string | null = null;
     client
@@ -509,7 +678,7 @@ export function SignerCeremony({
     // `fail` and `showsPdf` are read once per opening; re-fetching on their
     // identity would open the document again.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [opening, client, token]);
+  }, [opening, dataMode, client, token]);
 
   // --- render --------------------------------------------------------------
 
@@ -519,6 +688,57 @@ export function SignerCeremony({
   const changesCapped =
     typeof view?.max_change_requests === "number" && (view.changes_requested ?? 0) >= view.max_change_requests;
   const pdfUrl = documentUrl ?? fetchedUrl;
+
+  // --- data mode: the context the host's template places controls with ------
+
+  const fieldView = (f: Field, slot?: string) => (
+    <SignFieldView
+      field={f}
+      completed={state.completedFields.includes(f.id) || f.completed}
+      mark={state.mark}
+      disabled={isBusy || state.declining}
+      blockedReason={f.kind !== "date_signed" && !isMarkComplete(state.mark) ? "Adopt a signature first." : null}
+      onComplete={completeField}
+      className={slot}
+    />
+  );
+  const dataFields: DataField[] = (view?.fields ?? []).map((f) => ({
+    id: f.id,
+    kind: f.kind,
+    required: f.required,
+    label: f.label,
+    anchor: f.anchor,
+    completed: state.completedFields.includes(f.id) || f.completed,
+  }));
+  const locate = (f: DataField) => {
+    for (const handler of Array.from(locateRef.current)) {
+      try {
+        handler(f);
+      } catch {
+        // A host's locate handler cannot break the ceremony.
+      }
+    }
+    emit("locate", f.id, { pointer: f.anchor && "pointer" in f.anchor ? f.anchor.pointer : null });
+  };
+  const fieldsKey = JSON.stringify(dataFields);
+  const renderKey = `${fieldsKey}|${JSON.stringify(state.mark)}|${isBusy}|${state.declining}`;
+  const fieldViewRef = useRef(fieldView);
+  fieldViewRef.current = fieldView;
+  const ctx: DataRenderContext = useMemo(
+    () => ({
+      fields: JSON.parse(fieldsKey) as DataField[],
+      renderField: (id: string) => {
+        const f = view?.fields.find((x) => x.id === id);
+        return f ? <span data-fancy-sign-field-slot={id}>{fieldViewRef.current(f, "fancy-sign-field--placed")}</span> : null;
+      },
+      onLocate,
+      now: view?.envelope.sent_at ?? null,
+      reportLayout,
+    }),
+    // A new context when anything a placed control shows changes, and not otherwise.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [renderKey, view, onLocate, reportLayout],
+  );
 
   // Is the panel that caused the error on screen? If not (a host restored a
   // state, or the panel closed), the error falls back to the top banner rather
@@ -669,7 +889,32 @@ export function SignerCeremony({
       {state.step === "review" && view ? (
         <>
           <Card variant="outlined" padding="md" data-fancy-sign-panel="document">
-            {renderPage && pageCount > 0 ? (
+            {dataMode ? (
+              !renderData ? (
+                <div data-fancy-sign-document="no-renderer">
+                  <Callout color="red">
+                    This document cannot be shown here: the page has no template for it. Do not sign; contact the sender.
+                  </Callout>
+                </div>
+              ) : state.dataCheck === "refused" ? (
+                <div data-fancy-sign-document="refused">
+                  <Text color="muted">The document is not shown because it could not be checked against what is signed.</Text>
+                </div>
+              ) : signedData && state.dataCheck === "verified" ? (
+                <div
+                  ref={pagesRef}
+                  data-fancy-sign-document="data"
+                  data-fancy-sign-data-sha256={view.envelope.data_sha256}
+                  className="fancy-sign-ceremony__data"
+                >
+                  {renderData(signedData, ctx)}
+                </div>
+              ) : (
+                <Text color="muted" data-fancy-sign-document="loading">
+                  Loading the document...
+                </Text>
+              )
+            ) : renderPage && pageCount > 0 ? (
               <div ref={pagesRef} className="fancy-sign-ceremony__pages">
                 {Array.from({ length: pageCount }, (_, i) => i + 1).map((n) => (
                   <div
@@ -712,17 +957,35 @@ export function SignerCeremony({
 
           {view.fields.length > 0 ? (
             <div className="fancy-sign-ceremony__fields" data-fancy-sign-panel="fields">
-              {view.fields.map((f) => (
-                <SignFieldView
-                  key={f.id}
-                  field={f}
-                  completed={state.completedFields.includes(f.id) || f.completed}
-                  mark={state.mark}
-                  disabled={isBusy || state.declining}
-                  blockedReason={f.kind !== "date_signed" && !isMarkComplete(state.mark) ? "Adopt a signature first." : null}
-                  onComplete={completeField}
-                />
-              ))}
+              {view.fields.map((f) =>
+                dataMode ? (
+                  // Data mode: the checklist is the fallback UI, complete on its own. Show asks the
+                  // host's template to bring the field into view.
+                  <div key={f.id} className="fancy-sign-ceremony__checklist-item" data-fancy-sign-checklist={f.id}>
+                    {fieldView(f)}
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      disabled={state.dataCheck !== "verified"}
+                      data-fancy-sign-field-show={f.id}
+                      onClick={() => locate(dataFields.find((d) => d.id === f.id)!)}
+                    >
+                      Show
+                    </Button>
+                  </div>
+                ) : (
+                  <SignFieldView
+                    key={f.id}
+                    field={f}
+                    completed={state.completedFields.includes(f.id) || f.completed}
+                    mark={state.mark}
+                    disabled={isBusy || state.declining}
+                    blockedReason={f.kind !== "date_signed" && !isMarkComplete(state.mark) ? "Adopt a signature first." : null}
+                    onComplete={completeField}
+                  />
+                ),
+              )}
             </div>
           ) : null}
 

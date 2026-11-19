@@ -280,3 +280,49 @@ describe("every endpoint", () => {
     expect(body.get("events")).toBe("[]");
   });
 });
+
+describe("data mode (CC-fancy-0052)", () => {
+  const BASE_D = "https://app.example.com/fancy-sign";
+
+  it("knows the data-mode codes as members of the closed set", () => {
+    for (const code of ["data_hash_mismatch", "data_external_reference", "envelope_not_completed", "final_already_attached"]) {
+      expect(isSignErrorCode(code)).toBe(true);
+    }
+  });
+
+  it("fetches the signer's data as TEXT with its hash header, never parsed by the client", async () => {
+    const text = '{"a":[true,null,"x"],"b":1}';
+    const fetchImpl = vi.fn(async () =>
+      new Response(text, { status: 200, headers: { "content-type": "application/json", "x-fancy-sign-data-sha256": "ab".repeat(32) } }),
+    ) as unknown as typeof fetch;
+    const client = createSignClient({ baseUrl: BASE_D, fetch: fetchImpl, session: "s9" });
+    const got = await client.signerData("t");
+    expect(got).toEqual({ text, sha256: "ab".repeat(32) });
+    const [url, init] = (fetchImpl as unknown as ReturnType<typeof vi.fn>).mock.calls[0]! as [string, RequestInit];
+    expect(url).toBe(`${BASE_D}/s/t/document`);
+    expect(new Headers(init.headers).get("x-fancy-sign-session")).toBe("s9");
+  });
+
+  it("posts the rendering claim as a document.rendered event", async () => {
+    const { fetchImpl, calls } = stubFetch([{ status: 202, body: { recorded: true } }]);
+    const client = createSignClient({ baseUrl: BASE_D, fetch: fetchImpl, session: "s9" });
+    await client.reportRendered("t", { data_sha256: "9".repeat(64), renderer: "quote-v7 @ shop 1", pages: 2 });
+    expect(calls[0]!.url).toBe(`${BASE_D}/s/t/events`);
+    expect(calls[0]!.method).toBe("POST");
+    expect(JSON.parse(String(calls[0]!.body))).toEqual({ type: "document.rendered", data_sha256: "9".repeat(64), renderer: "quote-v7 @ shop 1", pages: 2 });
+  });
+
+  it("hits the sender's invite, signatures and final routes", async () => {
+    const { fetchImpl, calls } = stubFetch([{ status: 200, body: {} }]);
+    const client = createSignClient({ baseUrl: BASE_D, fetch: fetchImpl });
+    await client.inviteSigner("e 1", "alice");
+    await client.getSignatures("e 1");
+    await client.attachFinal("e 1", { sha256: "f".repeat(64), bytes: 1234 });
+    expect(calls.map((c) => `${c.method} ${c.url.slice(BASE_D.length)}`)).toEqual([
+      "POST /envelopes/e%201/signers/alice/invite",
+      "GET /envelopes/e%201/signatures",
+      "POST /envelopes/e%201/final",
+    ]);
+    expect(JSON.parse(String(calls[2]!.body))).toEqual({ sha256: "f".repeat(64), bytes: 1234 });
+  });
+});
